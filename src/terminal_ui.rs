@@ -82,7 +82,7 @@ impl TerminalUi
             if let Ok(event) = rx.try_recv(){
                 match event {
                     termion::event::Key::Ctrl('c') | termion::event::Key::Char('q') => {
-                        self.terminal.clear();
+                        self.terminal.clear().unwrap();
                         break;
                     }
                     _ => {}
