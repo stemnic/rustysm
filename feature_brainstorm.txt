@@ -1,0 +1,18 @@
+UI only (no backend)
+
+Feature requests:
+    - Paste links --> queue video
+    - History (that you can pick from)
+    - Video control (seek hotkeys)
+    - Reorder video
+        - move up down in list
+        - change priority on the fly
+
+Improvements:
+    - Show playback time in addition to percentage
+    - help menu for dumdums. press 'h' you retard
+    - More dinosaurs and ascii miggus
+    - fix colorz
+
+Creizy froff ideas
+    - fetch youtube thumbnail --> to ansi and display

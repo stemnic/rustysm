@@ -10,6 +10,7 @@ use tui::Frame;
 use std::path;
 use std::sync::mpsc::*;
 use std::thread;
+use std::time::Duration;
 
 use std::process;
 
@@ -38,7 +39,10 @@ impl TerminalUi
         let stdout = io::stdout().into_raw_mode()?;
         let backend = TermionBackend::new(stdout);
         let terminal_backend = Terminal::new(backend)?;
-        let mut tui_ui = TerminalUi { terminal: terminal_backend , current_status: StatusWatcher::new(path::PathBuf::from("/tmp/smqueue.status"), path::PathBuf::from("/tmp/smqueue.queue"))? };
+        let mut tui_ui = TerminalUi { terminal: terminal_backend , 
+                                    current_status: StatusWatcher::new(path::PathBuf::from("/tmp/smqueue.status"), 
+                                                                    path::PathBuf::from("/tmp/smqueue.queue"))? 
+        };
         tui_ui.current_status.start();
         tui_ui.terminal.clear().unwrap();
         Ok(tui_ui)
@@ -58,6 +62,7 @@ impl TerminalUi
                 }
             }
         });
+        let mut gauge_pros = 50;
         loop{
             /*
             let stdin = io::stdin();
@@ -79,11 +84,23 @@ impl TerminalUi
                 }
             }
             */
+
+
             if let Ok(event) = rx.try_recv(){
                 match event {
                     termion::event::Key::Ctrl('c') | termion::event::Key::Char('q') => {
                         self.terminal.clear().unwrap();
                         break;
+                    }
+                    termion::event::Key::Right => {
+                        if gauge_pros < 100 {
+                            gauge_pros = gauge_pros + 1;
+                        }
+                    }
+                    termion::event::Key::Left => {
+                        if gauge_pros > 0 {
+                            gauge_pros = gauge_pros - 1;
+                        }
                     }
                     _ => {}
                 }
@@ -121,7 +138,7 @@ impl TerminalUi
                 let gauge = Gauge::default()
                     .block(Block::default().title("Gauge1").borders(Borders::ALL))
                     .gauge_style(Style::default().fg(Color::Yellow))
-                    .percent(50);
+                    .percent(gauge_pros);
                 f.render_widget(gauge, chunks[1]);
     
                 
