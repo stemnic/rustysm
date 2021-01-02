@@ -13,6 +13,7 @@ Improvements:
     - help menu for dumdums. press 'h' you retard
     - More dinosaurs and ascii miggus
     - fix colorz
+    - GUI should only update on changes
 
 Creizy froff ideas
     - fetch youtube thumbnail --> to ansi and display
