@@ -110,12 +110,14 @@ fn update_from_queue_file(file_path : &path::Path, status_info: Arc<Mutex<QueueI
     let lines = contents.lines();
     let mut entries : Vec<QueueEntry> = vec![];
     for line in lines {
-        let types: Vec<&str> = line.splitn(4,';').collect(); // We expect 4 fields separated by ';'
-        let id = match types[0].parse::<u64>() { Ok(value) => value, Err(error) => return Err(Error::new(ErrorKind::InvalidData, error))};
-        let priority = match types[1].parse::<u64>(){ Ok(value) => value, Err(_) => return Err(Error::new(ErrorKind::InvalidData, "Failed to entry priority"))};
-        
-        // Append new queue entry after parsing
-        entries.push(QueueEntry::new(id, priority, types[2].to_string(), types[3].to_string()));
+        if line.contains(";"){
+            let types: Vec<&str> = line.splitn(4,';').collect(); // We expect 4 fields separated by ';'
+            let id = match types[0].parse::<u64>() { Ok(value) => value, Err(error) => return Err(Error::new(ErrorKind::InvalidData, error))};
+            let priority = match types[1].parse::<u64>(){ Ok(value) => value, Err(_) => return Err(Error::new(ErrorKind::InvalidData, "Failed to entry priority"))};
+            
+            // Append new queue entry after parsing
+            entries.push(QueueEntry::new(id, priority, types[2].to_string(), types[3].to_string()));
+        }
     }
 
     // Assign new entries to status_info
