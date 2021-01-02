@@ -15,6 +15,7 @@ use std::path;
 use notify::{Watcher, RecursiveMode, raw_watcher, RawEvent};
 use std::sync::mpsc::channel;
 
+use std::io::{Error, ErrorKind};
 
 #[derive(Debug)]
 struct QueueEntry{
@@ -38,15 +39,23 @@ impl QueueEntry{
 
 #[derive(Debug)]
 pub struct QueueInfo {
-    playback_status: String,
+    playback_state: PlaybackState,
     playback_time: f64,
     entry_list: Vec<QueueEntry>,
+}
+
+#[derive(Debug)]
+enum PlaybackState {
+    Playing,
+    Paused,
+    Idle, // Should be removed in backend implementation
+    Stopped,
 }
 
 impl QueueInfo {
     pub fn new() -> Self {
         let stru = QueueInfo{
-            playback_status: String::from(""),
+            playback_state: PlaybackState::Stopped,
             playback_time: 0.0,
             entry_list: Vec::new(),
         };
@@ -99,7 +108,7 @@ fn watch_queue_file(file_path : path::PathBuf, status_info: Arc<Mutex<QueueInfo>
     loop {
         match rx.recv() {
            Ok(RawEvent{path: Some(path), op: Ok(op), cookie}) => {
-               println!("{:?} {:?} ({:?})", op, path, cookie)
+               //println!("{:?} {:?} ({:?})", op, path, cookie)
            },
            Ok(event) => println!("broken event: {:?}", event),
            Err(e) => println!("watch error: {:?}", e),
@@ -112,8 +121,47 @@ fn update_from_status_file(file_path : &path::Path, status_info: Arc<Mutex<Queue
     let mut contents = String::new();
     let mut file = File::open(file_path)?;
     file.read_to_string(&mut contents)?;
+    
+    let mut lines = contents.lines();
+    // Expected 2 (minimal) lines
+    
+    // Read playback time from the first line
+    let playback_time: f64;
+    match lines.next(){
+        Some(value) => {
+            let playbacktime_result = value.parse::<f64>();
+            if playbacktime_result.is_err() {
+                return Err(Error::new(ErrorKind::InvalidData, "Failed to cast pla"));
+            }
+            playback_time = playbacktime_result.unwrap();
+            
+        }
+        None => {
+            return Err(Error::new(ErrorKind::InvalidData, "Playback time not found."));
+        }
+    }
 
-    // #TODO: finish this func. Read contents to struct
+    // 
+    let playback_state : PlaybackState;
+    match lines.next(){
+        Some(value) => {
+            match value {
+                "Paused"    => {playback_state = PlaybackState::Paused}
+                "Playing"   => {playback_state = PlaybackState::Playing}
+                "Idle"      => {playback_state = PlaybackState::Idle}
+                "Stopped"   => {playback_state = PlaybackState::Stopped}
+                _           => {return Err(Error::new(ErrorKind::InvalidData, "Invalid state"));}
+            }
+            
+        }
+        None => {
+            return Err(Error::new(ErrorKind::InvalidData, "Playback time not found."));
+        }
+    }
+
+    // Assign to status info
+    status_info.lock().unwrap().playback_time = playback_time;
+    status_info.lock().unwrap().playback_state = playback_state;
 
     return Ok(());
 }
@@ -136,9 +184,13 @@ fn watch_status_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<Queue
     loop {
         match rx.recv() {
            Ok(RawEvent{path: Some(path), op: Ok(op), cookie}) => {
-                println!("{:?} {:?} ({:?})", op, path, cookie);
+                //println!("{:?} {:?} ({:?})", op, path, cookie);
                 let result = match op {
-                    notify::op::WRITE | notify::op::CREATE => update_from_status_file(file_path, status_info.clone()),
+                    notify::op::WRITE | notify::op::CREATE => {
+                        let result = update_from_status_file(file_path, status_info.clone());
+                        if result.is_err() {println!("{:?}", result);}
+                        result
+                    },
                     _ => { Ok(()) },
                 };
                 if let Err(e) = result {

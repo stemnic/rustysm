@@ -3,10 +3,12 @@ use termion::raw::IntoRawMode;
 use tui::backend::Backend;
 use tui::Terminal;
 use tui::backend::TermionBackend;
-use tui::widgets::{Widget, Block, Borders, Gauge};
+use tui::widgets::{Widget, Block, Borders, Gauge, LineGauge, Tabs};
 use tui::style::{Color, Modifier, Style};
 use tui::layout::{Layout, Constraint, Direction};
 use tui::Frame;
+use tui::text::Spans;
+use tui::symbols;
 use std::path;
 use std::sync::mpsc::*;
 use std::thread;
@@ -105,7 +107,7 @@ impl TerminalUi
                     _ => {}
                 }
             }
-            
+            /*
             self.terminal.draw(|f| {
                 let size = f.size();
                 let block = Block::default()
@@ -115,37 +117,57 @@ impl TerminalUi
                 .direction(Direction::Vertical)
                 .constraints([
                     Constraint::Percentage(10),
-                    Constraint::Percentage(80),
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(70),
                     Constraint::Percentage(10),
                 ].as_ref())
                 .split(f.size());
                 
                 let chunksHorisontal = Layout::default()
-                .direction(Direction::Horizontal)
+                .direction(Direction::Vertical)
                 .constraints([
                     Constraint::Percentage(10),
                     Constraint::Percentage(80),
                     Constraint::Percentage(10),
                 ].as_ref())
-                .split(chunks[0]);
+                .split(chunks[2]);
     
                 let block = Block::default().title("Block").borders(Borders::ALL);
                 f.render_widget(block, chunksHorisontal[0]);
+                /*
                 let block = Block::default().title("Block").borders(Borders::ALL);
                 f.render_widget(block, chunksHorisontal[1]);
                 let block = Block::default().title("Block").borders(Borders::ALL);
                 f.render_widget(block, chunksHorisontal[2]);
+                */
+                /*
                 let gauge = Gauge::default()
-                    .block(Block::default().title("Gauge1").borders(Borders::ALL))
-                    .gauge_style(Style::default().fg(Color::Yellow))
+                    .block(Block::default().title("Volume").borders(Borders::ALL))
+                    .gauge_style(Style::default().fg(Color::Green).bg(Color::Gray))
                     .percent(gauge_pros);
-                f.render_widget(gauge, chunks[1]);
-    
+                f.render_widget(gauge, chunks[0]);
+                */
+                let titles = ["Tab1", "Tab2", "Tab3", "Tab4"].iter().cloned().map(Spans::from).collect();
+                let tabs = Tabs::new(titles)
+                    .block(Block::default().borders(Borders::NONE))
+                    .style(Style::default().fg(Color::White))
+                    .highlight_style(Style::default().fg(Color::Yellow))
+                    .divider(symbols::line::VERTICAL);
+                f.render_widget(tabs, chunks[0]);
+
+
+                let line_gauge = LineGauge::default()
+                    .block(Block::default().borders(Borders::ALL).title("Progress"))
+                    .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
+                    .line_set(symbols::line::ROUNDED)
+                    .ratio((gauge_pros as f64)/100.0);
+                f.render_widget(line_gauge, chunks[1]);
                 
-                let block = Block::default().title("Block 2").borders(Borders::ALL);
-                f.render_widget(block, chunks[2]);
+                //let block = Block::default().title("Block 2").borders(Borders::ALL);
+                //f.render_widget(block, chunks[2]);
     
             }).unwrap();
+            */
         }
     }
 
