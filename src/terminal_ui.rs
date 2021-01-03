@@ -3,7 +3,7 @@ use termion::raw::IntoRawMode;
 use tui::backend::Backend;
 use tui::Terminal;
 use tui::backend::TermionBackend;
-use tui::widgets::{Widget, Block, Borders, Gauge, LineGauge, Tabs, Table, Row, Cell, TableState, Wrap, Paragraph};
+use tui::widgets::{Widget, Block, Borders, Gauge, LineGauge, Tabs, Table, Row, Cell, TableState, Wrap, Paragraph, BarChart};
 use tui::style::{Color, Modifier, Style};
 use tui::layout::{Alignment, Layout, Constraint, Direction};
 use tui::Frame;
@@ -68,6 +68,7 @@ impl TerminalUi
         let mut gauge_pros = 50;
         let mut queue_list_pos = 0;
         let mut tab_select = 0;
+        let mut volume_percentage = 50;
         loop{
             /*
             let stdin = io::stdin();
@@ -129,6 +130,18 @@ impl TerminalUi
                         }
                     }
 
+                    termion::event::Key::Char('+') => {
+                        if volume_percentage < 100 {
+                            volume_percentage = volume_percentage + 1;
+                        }
+                    }
+
+                    termion::event::Key::Char('-') => {
+                        if volume_percentage > 0 {
+                            volume_percentage = volume_percentage - 1;
+                        }
+                    }
+
                     termion::event::Key::PageDown => {
                         if queue_list_pos < queue_size &&  queue_list_pos < queue_size-10{
                             queue_list_pos = queue_list_pos + 10;
@@ -166,21 +179,37 @@ impl TerminalUi
                 let block = Block::default()
                     .title("Fantastic box")
                     .borders(Borders::ALL);
+
                 let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Max(3),
-                    Constraint::Max(2),
-                    Constraint::Max(2),
+                    Constraint::Length(3),
+                    Constraint::Length(2),
+                    Constraint::Length(1),
+                    Constraint::Length(3),
                     Constraint::Percentage(80),
                 ].as_ref())
                 .split(f.size());
+
+                let playback_gauge = LineGauge::default()
+                    .block(Block::default().borders(Borders::BOTTOM).title(playback_state.to_string()))
+                    .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
+                    .line_set(symbols::line::ROUNDED)
+                    .ratio((playback_percentage as f64)/100.0);
+                f.render_widget(playback_gauge, chunks[0]);
+
+                let volume_gauge = LineGauge::default()
+                    .block(Block::default().borders(Borders::NONE).title("Volume"))
+                    .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
+                    .line_set(symbols::line::ROUNDED)
+                    .ratio((volume_percentage as f64)/100.0);
+                f.render_widget(volume_gauge, chunks[1]);
                 
                 let paragraph = Paragraph::new("👉👉👉 h, 4, F1 or ? for help 👈👈👈".to_string())
                     .style(Style::default().fg(Color::Yellow))
                     .alignment(Alignment::Left)
                     .wrap(Wrap { trim: true });
-                f.render_widget(paragraph, chunks[1]);
+                f.render_widget(paragraph, chunks[2]);
 
                 /*
                 let chunksHorisontal = Layout::default()
@@ -211,12 +240,12 @@ impl TerminalUi
                 */
                 let titles = ["Queue", "Hmm", "lalala", "Help"].iter().cloned().map(Spans::from).collect();
                 let tabs = Tabs::new(titles)
-                    .block(Block::default().borders(Borders::NONE))
+                    .block(Block::default().borders(Borders::ALL))
                     .style(Style::default().fg(Color::White))
                     .select(tab_select)
                     .highlight_style(Style::default().fg(Color::Yellow))
                     .divider(symbols::line::VERTICAL);
-                f.render_widget(tabs, chunks[2]);
+                f.render_widget(tabs, chunks[3]);
 
                 /*
                 let line_gauge = LineGauge::default()
@@ -226,12 +255,7 @@ impl TerminalUi
                     .ratio((gauge_pros as f64)/100.0);
                 f.render_widget(line_gauge, chunks[1]);
                 */
-                let line_gauge = LineGauge::default()
-                    .block(Block::default().borders(Borders::ALL).title(playback_state.to_string()))
-                    .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
-                    .line_set(symbols::line::ROUNDED)
-                    .ratio((playback_percentage as f64)/100.0);
-                f.render_widget(line_gauge, chunks[0]);
+
 
                 let mut rows = vec![];
 
@@ -251,7 +275,7 @@ impl TerminalUi
                         .bottom_margin(1)
                 )
                 // As any other widget, a Table can be wrapped in a Block.
-                .block(Block::default().title("Queue 🤔🤔🤔🤔🤔"))
+                .block(Block::default().borders(Borders::ALL).title("Queue 🤔🤔🤔🤔🤔"))
                 // Columns widths are constrained in the same way as Layout...
                 .widths(&[Constraint::Percentage(3), Constraint::Percentage(13), Constraint::Percentage(84)])
                 // ...and they can be separated by a fixed spacing.
@@ -265,7 +289,8 @@ impl TerminalUi
                 state.select(Some(queue_list_pos));
                 
                 match tab_select {
-                    0 => f.render_stateful_widget(table, chunks[3], &mut state),
+                    0 => f.render_stateful_widget(table, chunks[4], &mut state),
+                    1 => {},
                     _ => {}
                 }
                 

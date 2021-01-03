@@ -186,7 +186,7 @@ fn watch_status_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<Queue
 
     // Add a path to be watched. All files and directories at that path and
     // below will be monitored for changes.
-    println!("Started watching file {:?}", file_path);
+    //println!("Started watching file {:?}", file_path);
     match update_from_status_file(file_path, status_info.clone()) {Ok(_)=>{}, Err(error)=>println!("{}",error)};
     watcher.watch(file_path, RecursiveMode::Recursive).unwrap();
 
@@ -224,7 +224,7 @@ fn watch_queue_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<QueueI
 
     // Add a path to be watched. All files and directories at that path and
     // below will be monitored for changes.
-    println!("Started watching file {:?}", file_path);
+    //println!("Started watching file {:?}", file_path);
     match update_from_queue_file(file_path, status_info.clone()) {Ok(_)=>{}, Err(error)=>println!("{}",error)};
     watcher.watch(file_path, RecursiveMode::Recursive).unwrap();
 
