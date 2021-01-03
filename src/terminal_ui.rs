@@ -3,7 +3,7 @@ use termion::raw::IntoRawMode;
 use tui::backend::Backend;
 use tui::Terminal;
 use tui::backend::TermionBackend;
-use tui::widgets::{Widget, Block, Borders, Gauge, LineGauge, Tabs, Table, Row, Cell, TableState, Wrap, Paragraph, BarChart};
+use tui::widgets::{Widget, Block, Borders, Gauge, LineGauge, Tabs, Table, Row, Cell, TableState, Wrap, Paragraph, BarChart, Clear};
 use tui::style::{Color, Modifier, Style};
 use tui::layout::{Alignment, Layout, Constraint, Direction};
 use tui::Frame;
@@ -25,7 +25,7 @@ use termion::event::Key;
 use termion::input::TermRead;
 
 use crate::status_watcher::StatusWatcher;
-use crate::status_watcher::HistoryLog;
+use crate::history_watcher::HistoryWatcher;
 
 
 #[derive(Debug)]
@@ -38,7 +38,7 @@ pub struct TerminalUi
 {
     terminal: tui::Terminal<tui::backend::TermionBackend<termion::raw::RawTerminal<std::io::Stdout>>>,
     current_status: StatusWatcher,
-    history_log: HistoryLog,
+    history_log: HistoryWatcher,
 }
 
 fn get_normalized_volume(min: f32, max: f32, value: f32) -> f32{
@@ -61,7 +61,7 @@ impl TerminalUi
         let terminal_backend = Terminal::new(backend)?;
         let mut tui_ui = TerminalUi { terminal: terminal_backend , 
                                     current_status: StatusWatcher::new(path::PathBuf::from("/tmp/smqueue.status"), path::PathBuf::from("/tmp/smqueue.queue"))?,
-                                    history_log : HistoryLog::new(path::PathBuf::from("/tmp/smqueue.history"))? 
+                                    history_log : HistoryWatcher::new(path::PathBuf::from("/tmp/smqueue.history"))? 
         };
         tui_ui.current_status.start();
         tui_ui.terminal.clear().unwrap();
@@ -88,7 +88,6 @@ impl TerminalUi
         let mut volume_percentage = 50.0;
         let mut volume_db = 0.0;
         
-        self.history_log.read(100,0);
         loop{
             let mixer = mixer::Mixer::new("default", true).unwrap();
             let mixer_select = mixer::SelemId::new("Master", 0);
@@ -109,6 +108,8 @@ impl TerminalUi
             if queue_list.len() > 0 {
                 queue_size = queue_list.len()-1;
             }
+            self.history_log.read(100,0); // TODO: Have history make a notification when you need to update it
+            let history_entries = self.history_log.entries.clone();
 
             if let Ok(event) = rx.try_recv(){
                 while let Ok(_) = rx.try_recv(){
@@ -215,13 +216,13 @@ impl TerminalUi
                 f.render_widget(playback_gauge, chunks[0]);
 
                 let volume_gauge = LineGauge::default()
-                    .block(Block::default().borders(Borders::NONE).title("Volume | ".to_string() + &volume_db.to_string() + "dB / " + &(mixer_db_min.to_db()).to_string() + "dB"))
+                    .block(Block::default().borders(Borders::NONE).title("Volume 🔊 ".to_string() + &(mixer_db_min.to_db()).to_string() + "dB / " + &volume_db.to_string() + "dB / " + &(mixer_db_max.to_db()).to_string() + "dB"))
                     .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
                     .line_set(symbols::line::ROUNDED)
                     .ratio(get_normalized_volume(mixer_db_min.to_db(), mixer_db_max.to_db(), volume_mb.to_db()) as f64);
                 f.render_widget(volume_gauge, chunks[1]);
                 
-                let paragraph = Paragraph::new("👉👉👉 h, 4, F1 or ? for help 👈👈👈".to_string())
+                let paragraph = Paragraph::new("👉👉👉🆘 h, 4, F1 or ? for help 🆘👈👈👈".to_string())
                     .style(Style::default().fg(Color::Yellow))
                     .alignment(Alignment::Left)
                     .wrap(Wrap { trim: true });
@@ -254,7 +255,7 @@ impl TerminalUi
                     .percent(gauge_pros);
                 f.render_widget(gauge, chunks[0]);
                 */
-                let titles = ["Queue", "Hmm", "lalala", "Help"].iter().cloned().map(Spans::from).collect();
+                let titles = ["Queue 🔜", "History 📜", "lalala", "Help ❓"].iter().cloned().map(Spans::from).collect();
                 let tabs = Tabs::new(titles)
                     .block(Block::default().borders(Borders::ALL))
                     .style(Style::default().fg(Color::White))
@@ -305,24 +306,34 @@ impl TerminalUi
                 // If you wish to highlight a row in any specific way when it is selected...
                 .highlight_style(Style::default().add_modifier(Modifier::BOLD))
                 // ...and potentially show a symbol in front of the selection.
-                .highlight_symbol(">>");
+                .highlight_symbol("👉");
+
+                let mut rows_history = vec![];
+
+                for entry in history_entries {
+                    let mut style  = Style::default().fg(Color::Gray);
+                    rows_history.push(Row::new(vec![entry.timestamp, entry.name, entry.location]).style(style))
+                }
+                
+                let table_history = Table::new(rows_history)
+                .style(Style::default().fg(Color::White))
+                .header(
+                    Row::new(vec!["Timestamp", "Name", "Location"])
+                        .style(Style::default().fg(Color::Yellow))
+                        .bottom_margin(1)
+                )
+                .block(Block::default().borders(Borders::ALL).title("History 📜"))
+                .widths(&[Constraint::Percentage(10), Constraint::Percentage(45), Constraint::Percentage(45)])
+                .column_spacing(1).highlight_style(Style::default().add_modifier(Modifier::BOLD)).highlight_symbol("👉");
 
                 let mut state = TableState::default();
                 state.select(Some(queue_list_pos));
-                
                 match tab_select {
                     0 => f.render_stateful_widget(table, chunks[4], &mut state),
-                    1 => {},
-                    _ => {}
+                    1 => f.render_stateful_widget(table_history, chunks[4], &mut state),
+                    _ => {},
                 }
-                
-
-                //let block = Block::default().title("Block 2").borders(Borders::ALL);
-                //f.render_widget(block, chunks[2]);
-    
             }).unwrap();
-            
-            
         }
     }
 

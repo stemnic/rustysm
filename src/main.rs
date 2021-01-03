@@ -15,6 +15,7 @@ use std::path;
 
 mod status_watcher;
 mod terminal_ui;
+mod history_watcher;
 
 fn main() -> Result<(), io::Error> {
     let mut ui = terminal_ui::TerminalUi::new()?;
