@@ -13,6 +13,10 @@ use tui::symbols;
 use std::path;
 use std::sync::mpsc::*;
 use std::thread;
+use alsa::mixer;
+use alsa::Round;
+use std::f32;
+use std::u32;
 use std::time::Duration;
 
 use std::process;
@@ -21,6 +25,7 @@ use termion::event::Key;
 use termion::input::TermRead;
 
 use crate::status_watcher::StatusWatcher;
+use crate::status_watcher::HistoryLog;
 
 
 #[derive(Debug)]
@@ -32,7 +37,19 @@ struct TuiState {
 pub struct TerminalUi
 {
     terminal: tui::Terminal<tui::backend::TermionBackend<termion::raw::RawTerminal<std::io::Stdout>>>,
-    current_status: StatusWatcher
+    current_status: StatusWatcher,
+    history_log: HistoryLog,
+}
+
+fn get_normalized_volume(min: f32, max: f32, value: f32) -> f32{
+    // Based upon https://github.com/alsa-project/alsa-utils/blob/9b02b42db48d4c202afcaf5001019534f30f6c96/alsamixer/volume_mapping.c#L83-L118
+    // Does not work 100%, though well enough
+    let normalized = f32::powf(10.0,(value - max) / 6000.0);
+    let min_norm = f32::powf(10.0, (min - max) / 6000.0);
+    let normalized = (normalized - min_norm) / (1.0 - min_norm);
+    //let pos = min.to_db() - value.to_db();
+    //normalized = 1.0 - f32::powf(2.0, (pos)/(8.0));
+    return normalized
 }
 
 
@@ -43,8 +60,8 @@ impl TerminalUi
         let backend = TermionBackend::new(stdout);
         let terminal_backend = Terminal::new(backend)?;
         let mut tui_ui = TerminalUi { terminal: terminal_backend , 
-                                    current_status: StatusWatcher::new(path::PathBuf::from("/tmp/smqueue.status"), 
-                                                                    path::PathBuf::from("/tmp/smqueue.queue"))? 
+                                    current_status: StatusWatcher::new(path::PathBuf::from("/tmp/smqueue.status"), path::PathBuf::from("/tmp/smqueue.queue"))?,
+                                    history_log : HistoryLog::new(path::PathBuf::from("/tmp/smqueue.history"))? 
         };
         tui_ui.current_status.start();
         tui_ui.terminal.clear().unwrap();
@@ -68,28 +85,23 @@ impl TerminalUi
         let mut gauge_pros = 50;
         let mut queue_list_pos = 0;
         let mut tab_select = 0;
-        let mut volume_percentage = 50;
+        let mut volume_percentage = 50.0;
+        let mut volume_db = 0.0;
+        
+        self.history_log.read(100,0);
         loop{
-            /*
-            let stdin = io::stdin();
-            for evt in stdin.keys() {
-                if let Ok(key) = evt {
-                    //println!("Got {:?}", key);
-                    if key == termion::event::Key::Ctrl('c'){
-                        process::exit(0);
-                    }
-                    /*
-                    if let Err(err) = tx.send(Event::Input(key)) {
-                        eprintln!("{}", err);
-                        return;
-                    }
-                    if !ignore_exit_key.load(Ordering::Relaxed) && key == config.exit_key {
-                        return;
-                    }
-                    */
-                }
-            }
-            */
+            let mixer = mixer::Mixer::new("default", true).unwrap();
+            let mixer_select = mixer::SelemId::new("Master", 0);
+            let mixer_channel = match mixer.find_selem(&mixer_select) {
+                Some(value) => {value}
+                None => {panic!("Failed to open alsa interface")}
+            };
+            let (mixer_db_min, mixer_db_max) = mixer_channel.get_playback_db_range();
+            let (mixer_vol_min, mixer_vol_max) = mixer_channel.get_playback_volume_range();
+
+            let volume_mb = mixer_channel.get_playback_vol_db(mixer::SelemChannelId::Last).unwrap();
+            volume_db = mixer_channel.get_playback_vol_db(mixer::SelemChannelId::Last).unwrap().to_db();
+            volume_percentage = 1.0 - (volume_db / mixer_db_min.to_db());
             let playback_percentage = self.current_status.status_info.lock().unwrap().playback_time;
             let queue_list = self.current_status.status_info.lock().unwrap().entry_list.clone();
             let playback_state = self.current_status.status_info.lock().unwrap().playback_state.clone();
@@ -131,14 +143,18 @@ impl TerminalUi
                     }
 
                     termion::event::Key::Char('+') => {
-                        if volume_percentage < 100 {
-                            volume_percentage = volume_percentage + 1;
+                        if volume_percentage < 1.0 {
+                            let to_db_part = ((1.0 - volume_percentage) - 0.01) * mixer_db_min.to_db();
+                            let to_db = mixer::MilliBel::from_db(to_db_part);
+                            mixer_channel.set_playback_db_all(to_db, Round::Floor).unwrap();
                         }
                     }
 
                     termion::event::Key::Char('-') => {
-                        if volume_percentage > 0 {
-                            volume_percentage = volume_percentage - 1;
+                        if volume_percentage > 0.0 {
+                            let to_db_part = ((1.0 - volume_percentage) + 0.01) * mixer_db_min.to_db();
+                            let to_db = mixer::MilliBel::from_db(to_db_part);
+                            mixer_channel.set_playback_db_all(to_db, Round::Floor).unwrap();
                         }
                     }
 
@@ -173,7 +189,7 @@ impl TerminalUi
                     _ => {}
                 }
             }
-            
+
             self.terminal.draw(|f| {
                 let size = f.size();
                 let block = Block::default()
@@ -199,10 +215,10 @@ impl TerminalUi
                 f.render_widget(playback_gauge, chunks[0]);
 
                 let volume_gauge = LineGauge::default()
-                    .block(Block::default().borders(Borders::NONE).title("Volume"))
+                    .block(Block::default().borders(Borders::NONE).title("Volume | ".to_string() + &volume_db.to_string() + "dB / " + &(mixer_db_min.to_db()).to_string() + "dB"))
                     .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
                     .line_set(symbols::line::ROUNDED)
-                    .ratio((volume_percentage as f64)/100.0);
+                    .ratio(get_normalized_volume(mixer_db_min.to_db(), mixer_db_max.to_db(), volume_mb.to_db()) as f64);
                 f.render_widget(volume_gauge, chunks[1]);
                 
                 let paragraph = Paragraph::new("👉👉👉 h, 4, F1 or ? for help 👈👈👈".to_string())
@@ -258,9 +274,15 @@ impl TerminalUi
 
 
                 let mut rows = vec![];
+                let mut first = true;
 
                 for line in queue_list {
-                    rows.push(Row::new(vec![line.priority.to_string(), line.entry_type, line.file_location]).style(Style::default().fg(Color::Gray)))
+                    let mut style  = Style::default().fg(Color::Gray);
+                    if first {
+                        style  = Style::default().fg(Color::Yellow);
+                        first = false;
+                    }
+                    rows.push(Row::new(vec![line.priority.to_string(), line.entry_type, line.file_location]).style(style))
                 }
                 
                 let table = Table::new(rows)
@@ -299,6 +321,7 @@ impl TerminalUi
                 //f.render_widget(block, chunks[2]);
     
             }).unwrap();
+            
             
         }
     }

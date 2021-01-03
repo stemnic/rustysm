@@ -8,5 +8,7 @@ edition = "2018"
 
 [dependencies]
 tui = "0.14"
+alsa = "0.4.3"
 termion = "1.5"
 notify = "4.0.12"
+easy_reader = "0.5.0"
