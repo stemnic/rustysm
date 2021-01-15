@@ -7,23 +7,15 @@ use tui::widgets::{Widget, Block, Borders, Gauge, LineGauge, Tabs, Table, Row, C
 use tui::style::{Color, Modifier, Style};
 use tui::layout::{Alignment, Layout, Constraint, Direction};
 use tui::Frame;
-use tui::text::Spans;
-use tui::text::Span;
+use tui::text::{Spans, Span};
 use tui::symbols;
-use std::path;
+use std::{path, thread};
 use std::sync::mpsc::*;
-use std::thread;
-use alsa::mixer;
-use alsa::Round;
-use std::f32;
-use std::u32;
-use std::time::Duration;
-
-use std::process;
 
 use termion::event::Key;
 use termion::input::TermRead;
 
+use crate::alsa_controller::AlsaController;
 use crate::status_watcher::StatusWatcher;
 use crate::history_watcher::HistoryWatcher;
 
@@ -40,18 +32,6 @@ pub struct TerminalUi
     current_status: StatusWatcher,
     history_log: HistoryWatcher,
 }
-
-fn get_normalized_volume(min: f32, max: f32, value: f32) -> f32{
-    // Based upon https://github.com/alsa-project/alsa-utils/blob/9b02b42db48d4c202afcaf5001019534f30f6c96/alsamixer/volume_mapping.c#L83-L118
-    // Does not work 100%, though well enough
-    let normalized = f32::powf(10.0,(value - max) / 6000.0);
-    let min_norm = f32::powf(10.0, (min - max) / 6000.0);
-    let normalized = (normalized - min_norm) / (1.0 - min_norm);
-    //let pos = min.to_db() - value.to_db();
-    //normalized = 1.0 - f32::powf(2.0, (pos)/(8.0));
-    return normalized
-}
-
 
 impl TerminalUi 
 {
@@ -85,22 +65,11 @@ impl TerminalUi
         let mut gauge_pros = 50;
         let mut queue_list_pos = 0;
         let mut tab_select = 0;
-        let mut volume_percentage = 50.0;
-        let mut volume_db = 0.0;
-        
-        loop{
-            let mixer = mixer::Mixer::new("default", true).unwrap();
-            let mixer_select = mixer::SelemId::new("Master", 0);
-            let mixer_channel = match mixer.find_selem(&mixer_select) {
-                Some(value) => {value}
-                None => {panic!("Failed to open alsa interface")}
-            };
-            let (mixer_db_min, mixer_db_max) = mixer_channel.get_playback_db_range();
-            let (mixer_vol_min, mixer_vol_max) = mixer_channel.get_playback_volume_range();
+        let mut alsa_controller = AlsaController::new().unwrap();
 
-            let volume_mb = mixer_channel.get_playback_vol_db(mixer::SelemChannelId::Last).unwrap();
-            volume_db = mixer_channel.get_playback_vol_db(mixer::SelemChannelId::Last).unwrap().to_db();
-            volume_percentage = 1.0 - (volume_db / mixer_db_min.to_db());
+        loop{
+
+            
             let playback_percentage = self.current_status.status_info.lock().unwrap().playback_time;
             let queue_list = self.current_status.status_info.lock().unwrap().entry_list.clone();
             let playback_state = self.current_status.status_info.lock().unwrap().playback_state.clone();
@@ -144,19 +113,11 @@ impl TerminalUi
                     }
 
                     termion::event::Key::Char('+') => {
-                        if volume_percentage < 1.0 {
-                            let to_db_part = ((1.0 - volume_percentage) - 0.01) * mixer_db_min.to_db();
-                            let to_db = mixer::MilliBel::from_db(to_db_part);
-                            mixer_channel.set_playback_db_all(to_db, Round::Floor).unwrap();
-                        }
+                        alsa_controller.volume_increment_db(1).unwrap();
                     }
 
                     termion::event::Key::Char('-') => {
-                        if volume_percentage > 0.0 {
-                            let to_db_part = ((1.0 - volume_percentage) + 0.01) * mixer_db_min.to_db();
-                            let to_db = mixer::MilliBel::from_db(to_db_part);
-                            mixer_channel.set_playback_db_all(to_db, Round::Floor).unwrap();
-                        }
+                        alsa_controller.volume_decrement_db(1).unwrap();
                     }
 
                     termion::event::Key::PageDown => {
@@ -216,10 +177,10 @@ impl TerminalUi
                 f.render_widget(playback_gauge, chunks[0]);
 
                 let volume_gauge = LineGauge::default()
-                    .block(Block::default().borders(Borders::NONE).title("Volume 🔊 ".to_string() + &(mixer_db_min.to_db()).to_string() + "dB / " + &volume_db.to_string() + "dB / " + &(mixer_db_max.to_db()).to_string() + "dB"))
+                    .block(Block::default().borders(Borders::NONE).title("Volume 🔊 ".to_string() + &alsa_controller.get_description_str() ))
                     .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
                     .line_set(symbols::line::ROUNDED)
-                    .ratio(get_normalized_volume(mixer_db_min.to_db(), mixer_db_max.to_db(), volume_mb.to_db()) as f64);
+                    .ratio(alsa_controller.get_human_ear_volume_normalized());
                 f.render_widget(volume_gauge, chunks[1]);
                 
                 let paragraph = Paragraph::new("👉👉👉🆘 h, 4, F1 or ? for help 🆘👈👈👈".to_string())

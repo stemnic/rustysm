@@ -25,6 +25,9 @@ use chrono::prelude::DateTime;
 use chrono::Utc;
 use std::time::{SystemTime, UNIX_EPOCH, Duration};
 
+// Logging
+use log::{error, info, warn, debug};
+
 #[derive(Debug, Clone)]
 pub struct HistoryLogEntry {
     pub timestamp: String,
@@ -56,7 +59,7 @@ impl HistoryWatcher {
         let mut entries = vec![];
         while let Some(line) = reader.prev_line()? {
             // Loop until we reach target start offset
-            if (line_offset < line_offset_from_tail){
+            if line_offset < line_offset_from_tail{
                 line_offset += 1;
                 continue;
             }

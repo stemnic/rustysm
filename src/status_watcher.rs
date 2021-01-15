@@ -17,6 +17,9 @@ use std::sync::mpsc::channel;
 use std::fmt;
 use std::io::{Error, ErrorKind};
 
+// Logging
+use log::{error, info, warn, debug};
+
 #[derive(Debug, Clone)]
 pub struct QueueEntry{
     pub id: u64,
@@ -187,7 +190,7 @@ fn watch_status_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<Queue
     // Add a path to be watched. All files and directories at that path and
     // below will be monitored for changes.
     //println!("Started watching file {:?}", file_path);
-    match update_from_status_file(file_path, status_info.clone()) {Ok(_)=>{}, Err(error)=>println!("{}",error)};
+    match update_from_status_file(file_path, status_info.clone()) {Ok(_)=>{}, Err(error)=>warn!("{}",error)};
     watcher.watch(file_path, RecursiveMode::Recursive).unwrap();
 
     loop {
@@ -197,17 +200,17 @@ fn watch_status_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<Queue
                 let result = match op {
                     notify::op::WRITE | notify::op::CREATE => {
                         let result = update_from_status_file(file_path, status_info.clone());
-                        if result.is_err() {println!("{:?}", result);}
+                        if result.is_err() {warn!("{:?}", result);}
                         result
                     },
                     _ => { Ok(()) },
                 };
                 if let Err(e) = result {
-                    println!("Got error trying to read file: {:?}", e); // #TODO: Store in struct (pass to terminal_ui)
+                    warn!("Got error trying to read file: {:?}", e); // #TODO: Store in struct (pass to terminal_ui)
                 }
            },
-           Ok(event) => println!("broken event: {:?}", event),
-           Err(e) => println!("watch error: {:?}", e),
+           Ok(event) => warn!("broken event: {:?}", event),
+           Err(e) => warn!("watch error: {:?}", e),
         }
     }
 }
@@ -225,7 +228,7 @@ fn watch_queue_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<QueueI
     // Add a path to be watched. All files and directories at that path and
     // below will be monitored for changes.
     //println!("Started watching file {:?}", file_path);
-    match update_from_queue_file(file_path, status_info.clone()) {Ok(_)=>{}, Err(error)=>println!("{}",error)};
+    match update_from_queue_file(file_path, status_info.clone()) {Ok(_)=>{}, Err(error)=>warn!("{}",error)};
     watcher.watch(file_path, RecursiveMode::Recursive).unwrap();
 
     loop {
@@ -235,17 +238,17 @@ fn watch_queue_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<QueueI
                 let result = match op {
                     notify::op::WRITE | notify::op::CREATE => {
                         let result = update_from_queue_file(file_path, status_info.clone());
-                        if result.is_err() {println!("{:?}", result);}
+                        if result.is_err() {warn!("{:?}", result);}
                         result
                     },
                     _ => { Ok(()) },
                 };
                 if let Err(e) = result {
-                    println!("Got error trying to read file: {:?}", e); // #TODO: Store in struct (pass to terminal_ui)
+                    warn!("Got error trying to read file: {:?}", e); // #TODO: Store in struct (pass to terminal_ui)
                 }
            },
-           Ok(event) => println!("broken event: {:?}", event),
-           Err(e) => println!("watch error: {:?}", e),
+           Ok(event) => warn!("broken event: {:?}", event),
+           Err(e) => warn!("watch error: {:?}", e),
         }
     }
 }
