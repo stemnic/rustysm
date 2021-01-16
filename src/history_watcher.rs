@@ -22,7 +22,7 @@ use easy_reader::EasyReader;
 
 // TIME
 use chrono::prelude::DateTime;
-use chrono::Utc;
+use chrono::Local;
 use std::time::{SystemTime, UNIX_EPOCH, Duration};
 
 // Logging
@@ -71,7 +71,7 @@ impl HistoryWatcher {
 
             let unix_timestamp_sec = match types[0].parse::<u64>() { Ok(value) => value, Err(error) => return Err(Error::new(ErrorKind::InvalidData, error))};
             // Create DateTime from SystemTime
-            let datetime = DateTime::<Utc>::from(UNIX_EPOCH + Duration::from_secs(unix_timestamp_sec));
+            let datetime = DateTime::<Local>::from(UNIX_EPOCH + Duration::from_secs(unix_timestamp_sec));
             // Formats the combined date and time with the specified format string.
             let timestamp_str = datetime.format("%H:%M %d-%b %y").to_string();
 
