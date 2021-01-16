@@ -16,10 +16,12 @@ use termion::event::Key;
 use termion::input::TermRead;
 
 use crate::alsa_controller::AlsaController;
-use crate::status_watcher::StatusWatcher;
+use crate::status_watcher::{StatusWatcher, PlaybackState};
 use crate::history_watcher::HistoryWatcher;
 use crate::tab_elements::TabsElements;
+use crate::socket_com::{SocketCom, EntryType};
 
+use log::{error, info, warn, debug};
 
 #[derive(Debug)]
 struct TuiState {
@@ -68,6 +70,7 @@ impl TerminalUi
         let mut queue_list_pos = 0;
         let mut tab_select = 0;
         let mut alsa_controller = AlsaController::new().unwrap();
+        let mut socket_controller = SocketCom::new().unwrap();
         let mut queue_tab_element = TabsElements::new("Queue 🔜").unwrap();
         let mut history_tab_element = TabsElements::new("History 📜").unwrap();
         loop{
@@ -102,13 +105,13 @@ impl TerminalUi
                     termion::event::Key::Char('?')  => tab_select = 3,
                     termion::event::Key::F(1)       => tab_select = 3,
                     termion::event::Key::Right => {
-                        if gauge_pros < 100 {
-                            gauge_pros = gauge_pros + 1;
+                        if tab_select < 3 {
+                            tab_select = tab_select + 1;
                         }
                     }
                     termion::event::Key::Left => {
-                        if gauge_pros > 0 {
-                            gauge_pros = gauge_pros - 1;
+                        if tab_select > 0 {
+                            tab_select = tab_select - 1;
                         }
                     }
                     termion::event::Key::Char('+') => {
@@ -148,8 +151,31 @@ impl TerminalUi
                             _ => {},
                         }
                     }
-                    termion::event::Key::Char('p') => {
-                        println!("{:?}", self.current_status);
+                    termion::event::Key::Char(' ') => {
+                        // Space
+                        match playback_state {
+                            PlaybackState::Playing => socket_controller.pause_playback().unwrap(),
+                            _ => socket_controller.start_playback().unwrap()
+                        }
+                    }
+                    termion::event::Key::Char('\n') => {
+                        match tab_select {
+                            0 => {
+                                if queue_tab_element.table_list_size != 0 {
+                                    let pos = queue_tab_element.table_list_pos;
+                                    let queue_elem = queue_list[pos].clone();
+                                    socket_controller.promote_entry(queue_elem.id).unwrap();
+                                }
+                            },
+                            1 => {
+                                if history_tab_element.table_list_size != 0 {
+                                    let pos = history_tab_element.table_list_pos;
+                                    let history_element = history_entries[pos].clone();
+                                    socket_controller.add_entry(EntryType::LocalMedia, history_element.location).unwrap();
+                                }
+                            },
+                            _ => {},
+                        }
                     }
                     _ => {}
                 }
@@ -255,11 +281,13 @@ impl TerminalUi
                 .widths(&[Constraint::Percentage(10), Constraint::Percentage(45), Constraint::Percentage(45)])
                 .column_spacing(1).highlight_style(Style::default().add_modifier(Modifier::BOLD)).highlight_symbol("👉");
                 let help_text = vec![
-                    Spans::from(Span::styled("Use the number row to go between tabs", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("←/→ or Use the number row to go between tabs", Style::default().fg(Color::Gray))),
                     Spans::from(Span::styled("+/-: Adjusts volume on the system", Style::default().fg(Color::Gray))),
                     Spans::from(Span::styled("Esc/q/Ctrl-c: Quites this rusty application", Style::default().fg(Color::Gray))),
                     Spans::from(Span::styled("↑/↓: Move up and down in lists", Style::default().fg(Color::Gray))),
                     Spans::from(Span::styled("Pageup/Pagedown: Jump up and down in lists", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("Space: Play/Pause playing media", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("Enter: (Queue)Jump to or add to entry (History)", Style::default().fg(Color::Gray))),
                 ];
                 let help_block = Paragraph::new(help_text)
                     .block(Block::default().title("Help me").borders(Borders::ALL))
