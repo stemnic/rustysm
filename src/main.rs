@@ -15,6 +15,7 @@ mod status_watcher;
 mod terminal_ui;
 mod history_watcher;
 mod alsa_controller;
+mod tab_elements;
 
 use log::LevelFilter;
 use log4rs::append::file::FileAppender;
@@ -32,6 +33,7 @@ fn init_log(log_file_name : &str) -> () {
         .logger(Logger::builder().build("rustysm::terminal_ui", LevelFilter::Debug))
         .logger(Logger::builder().build("rustysm::history_watcher", LevelFilter::Debug))
         .logger(Logger::builder().build("rustysm::alsa_controller", LevelFilter::Debug))
+        .logger(Logger::builder().build("rustysm::tab_elements", LevelFilter::Debug))
         .build(Root::builder()
                 .appender("logfile")
                 

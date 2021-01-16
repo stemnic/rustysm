@@ -18,6 +18,7 @@ use termion::input::TermRead;
 use crate::alsa_controller::AlsaController;
 use crate::status_watcher::StatusWatcher;
 use crate::history_watcher::HistoryWatcher;
+use crate::tab_elements::TabsElements;
 
 
 #[derive(Debug)]
@@ -25,6 +26,7 @@ struct TuiState {
     playback_position_percent: f64, // #TODO: Should be Duration when backend supports actual playback
 
 }
+
 
 pub struct TerminalUi
 {
@@ -66,7 +68,8 @@ impl TerminalUi
         let mut queue_list_pos = 0;
         let mut tab_select = 0;
         let mut alsa_controller = AlsaController::new().unwrap();
-
+        let mut queue_tab_element = TabsElements::new("Queue 🔜").unwrap();
+        let mut history_tab_element = TabsElements::new("History 📜").unwrap();
         loop{
 
             
@@ -77,8 +80,10 @@ impl TerminalUi
             if queue_list.len() > 0 {
                 queue_size = queue_list.len()-1;
             }
+            queue_tab_element.update_size(queue_size);
             self.history_log.read(100,0); // TODO: Have history make a notification when you need to update it
             let history_entries = self.history_log.entries.clone();
+            history_tab_element.update_size(history_entries.len()-1);
 
             if let Ok(event) = rx.try_recv(){
                 while let Ok(_) = rx.try_recv(){
@@ -106,12 +111,6 @@ impl TerminalUi
                             gauge_pros = gauge_pros - 1;
                         }
                     }
-                    termion::event::Key::Down => {
-                        if queue_list_pos < queue_size {
-                            queue_list_pos = queue_list_pos + 1;
-                        }
-                    }
-
                     termion::event::Key::Char('+') => {
                         alsa_controller.volume_increment_db(1).unwrap();
                     }
@@ -120,29 +119,33 @@ impl TerminalUi
                         alsa_controller.volume_decrement_db(1).unwrap();
                     }
 
+                    termion::event::Key::Down => {
+                        match tab_select {
+                            0 => queue_tab_element.pos_down(),
+                            1 => history_tab_element.pos_down(),
+                            _ => {},
+                        }
+                    }
+
                     termion::event::Key::PageDown => {
-                        if queue_list_pos < queue_size &&  queue_list_pos < queue_size-10{
-                            queue_list_pos = queue_list_pos + 10;
-                            if queue_list_pos == queue_size {
-                                queue_list_pos = queue_size;
-                            }
-                        } else {
-                            queue_list_pos = queue_size;
+                        match tab_select {
+                            0 => queue_tab_element.pos_jump_down(10),
+                            1 => history_tab_element.pos_jump_down(10),
+                            _ => {},
                         }
                     }
                     termion::event::Key::Up => {
-                        if queue_list_pos > 0 {
-                            queue_list_pos = queue_list_pos - 1;
+                        match tab_select {
+                            0 => queue_tab_element.pos_up(),
+                            1 => history_tab_element.pos_up(),
+                            _ => {},
                         }
                     }
                     termion::event::Key::PageUp => {
-                        if queue_list_pos > 0 && queue_list_pos > 10 {
-                            queue_list_pos = queue_list_pos - 10;
-                            if queue_list_pos == 0 {
-                                queue_list_pos = 0;
-                            }
-                        } else {
-                            queue_list_pos = 0;
+                        match tab_select {
+                            0 => queue_tab_element.pos_jump_up(10),
+                            1 => history_tab_element.pos_jump_up(10),
+                            _ => {},
                         }
                     }
                     termion::event::Key::Char('p') => {
@@ -189,34 +192,8 @@ impl TerminalUi
                     .wrap(Wrap { trim: true });
                 f.render_widget(paragraph, chunks[2]);
 
-                /*
-                let chunksHorisontal = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Percentage(10),
-                    Constraint::Percentage(80),
-                    Constraint::Percentage(10),
-                ].as_ref())
-                .split(chunks[2]);
-                */
-                /*
-                let block = Block::default().title("Block").borders(Borders::ALL);
-                f.render_widget(block, chunksHorisontal[0]);
-                */
-                /*
-                let block = Block::default().title("Block").borders(Borders::ALL);
-                f.render_widget(block, chunksHorisontal[1]);
-                let block = Block::default().title("Block").borders(Borders::ALL);
-                f.render_widget(block, chunksHorisontal[2]);
-                */
-                /*
-                let gauge = Gauge::default()
-                    .block(Block::default().title("Volume").borders(Borders::ALL))
-                    .gauge_style(Style::default().fg(Color::Green).bg(Color::Gray))
-                    .percent(gauge_pros);
-                f.render_widget(gauge, chunks[0]);
-                */
-                let titles = ["Queue 🔜", "History 📜", "lalala", "Help ❓"].iter().cloned().map(Spans::from).collect();
+                
+                let titles = [&queue_tab_element.display_name, &history_tab_element.display_name, "lalala", "Help ❓"].iter().cloned().map(Spans::from).collect();
                 let tabs = Tabs::new(titles)
                     .block(Block::default().borders(Borders::ALL))
                     .style(Style::default().fg(Color::White))
@@ -224,15 +201,6 @@ impl TerminalUi
                     .highlight_style(Style::default().fg(Color::Yellow))
                     .divider(symbols::line::VERTICAL);
                 f.render_widget(tabs, chunks[3]);
-
-                /*
-                let line_gauge = LineGauge::default()
-                    .block(Block::default().borders(Borders::ALL).title("Progress"))
-                    .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
-                    .line_set(symbols::line::ROUNDED)
-                    .ratio((gauge_pros as f64)/100.0);
-                f.render_widget(line_gauge, chunks[1]);
-                */
 
 
                 let mut rows = vec![];
@@ -286,12 +254,30 @@ impl TerminalUi
                 .block(Block::default().borders(Borders::ALL).title("History 📜"))
                 .widths(&[Constraint::Percentage(10), Constraint::Percentage(45), Constraint::Percentage(45)])
                 .column_spacing(1).highlight_style(Style::default().add_modifier(Modifier::BOLD)).highlight_symbol("👉");
-
-                let mut state = TableState::default();
-                state.select(Some(queue_list_pos));
+                let help_text = vec![
+                    Spans::from(Span::styled("Use the number row to go between tabs", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("+/-: Adjusts volume on the system", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("Esc/q/Ctrl-c: Quites this rusty application", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("↑/↓: Move up and down in lists", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("Pageup/Pagedown: Jump up and down in lists", Style::default().fg(Color::Gray))),
+                ];
+                let help_block = Paragraph::new(help_text)
+                    .block(Block::default().title("Help me").borders(Borders::ALL))
+                    .style(Style::default().fg(Color::White).bg(Color::Black))
+                    .alignment(Alignment::Left)
+                    .wrap(Wrap { trim: true });
                 match tab_select {
-                    0 => f.render_stateful_widget(table, chunks[4], &mut state),
-                    1 => f.render_stateful_widget(table_history, chunks[4], &mut state),
+                    0 => {
+                        let mut state = TableState::default();
+                        state.select(Some(queue_tab_element.table_list_pos));
+                        f.render_stateful_widget(table, chunks[4], &mut state)
+                    },
+                    1 => {
+                        let mut state = TableState::default();
+                        state.select(Some(history_tab_element.table_list_pos));
+                        f.render_stateful_widget(table_history, chunks[4], &mut state)
+                    },
+                    3 => f.render_widget(help_block, chunks[4]),
                     _ => {},
                 }
             }).unwrap();
