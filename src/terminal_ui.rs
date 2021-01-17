@@ -20,7 +20,7 @@ use crate::alsa_controller::AlsaController;
 use crate::status_watcher::{StatusWatcher, PlaybackState};
 use crate::history_watcher::{HistoryWatcher, DEFAULT_HISTORY_ENTRIES_TO_FETCH};
 use crate::tab_elements::TabsElements;
-use crate::socket_com::{SocketCom, EntryType, DEFAULT_PRIORITY};
+use crate::socket_com::{SocketCom, DEFAULT_PRIORITY};
 
 use log::{error, info, warn, debug};
 
@@ -49,11 +49,11 @@ impl TerminalUi
                                     history_log : HistoryWatcher::new(path::PathBuf::from("/tmp/smqueue.history"))? 
         };
         tui_ui.current_status.start();
-        tui_ui.terminal.clear().unwrap();
+        tui_ui.terminal.clear()?;
         Ok(tui_ui)
     }
 
-    pub fn start_draw(&mut self, tick_rate : u64) {
+    pub fn start_draw(&mut self, tick_rate : u64) -> Result<(), io::Error> {
         let (tx, rx) = channel();
 
         thread::spawn(move || {
@@ -67,13 +67,11 @@ impl TerminalUi
                 }
             }
         });
-        let mut gauge_pros = 50;
-        let mut queue_list_pos = 0;
         let mut tab_select = 0;
-        let mut alsa_controller = AlsaController::new().unwrap();
-        let mut socket_controller = SocketCom::new().unwrap();
-        let mut queue_tab_element = TabsElements::new("Queue 🔜").unwrap();
-        let mut history_tab_element = TabsElements::new("History 📜").unwrap();
+        let mut alsa_controller = AlsaController::new()?;
+        let mut socket_controller = SocketCom::new()?;
+        let mut queue_tab_element = TabsElements::new("Queue 🔜")?;
+        let mut history_tab_element = TabsElements::new("History 📜")?;
 
         let tick_rate = Duration::from_millis(tick_rate);
         let mut last_tick = Instant::now();
@@ -89,7 +87,7 @@ impl TerminalUi
                 queue_size = queue_list.len()-1;
             }
             queue_tab_element.update_size(queue_size);
-            self.history_log.read(DEFAULT_HISTORY_ENTRIES_TO_FETCH,0).unwrap(); // TODO: Have history make a notification when you need to update it
+            self.history_log.read(DEFAULT_HISTORY_ENTRIES_TO_FETCH,0)?; // TODO: Have history make a notification when you need to update it
             let history_entries = self.history_log.entries.clone();
             history_tab_element.update_size(history_entries.len()-1);
 
@@ -99,8 +97,8 @@ impl TerminalUi
                 }
                 match event {
                     termion::event::Key::Ctrl('c') | termion::event::Key::Char('q') | termion::event::Key::Esc => {
-                        self.terminal.clear().unwrap();
-                        break;
+                        self.terminal.clear()?;
+                        return Ok(());
                     }
                     termion::event::Key::Char('1')  => tab_select = 0,
                     termion::event::Key::Char('2')  => tab_select = 1,
@@ -120,11 +118,11 @@ impl TerminalUi
                         }
                     }
                     termion::event::Key::Char('+') => {
-                        alsa_controller.volume_increment_db(1).unwrap();
+                        alsa_controller.volume_increment_db(1)?;
                     }
 
                     termion::event::Key::Char('-') => {
-                        alsa_controller.volume_decrement_db(1).unwrap();
+                        alsa_controller.volume_decrement_db(1)?;
                     }
 
                     termion::event::Key::Down => {
@@ -156,16 +154,36 @@ impl TerminalUi
                             _ => {},
                         }
                     }
+                    termion::event::Key::Delete | termion::event::Key::Char('r') => {
+                        match tab_select {
+                            0 => {
+                                if queue_tab_element.table_list_size != 0 {
+                                    let pos = queue_tab_element.table_list_pos;
+                                    let queue_elem = queue_list[pos].clone();
+                                    socket_controller.delete_entry(queue_elem.id)?;
+                                }
+                            },
+                            _ => {},
+                        }
+                    }
+                    termion::event::Key::Ctrl('r') => {
+                        match tab_select {
+                            0 => {
+                                socket_controller.clear_queue()?;
+                            },
+                            _ => {},
+                        }
+                    }
                     termion::event::Key::Char(' ') => {
                         // Space
                         match playback_state {
-                            PlaybackState::Playing => socket_controller.pause_playback().unwrap(),
-                            _ => socket_controller.start_playback().unwrap()
+                            PlaybackState::Playing => socket_controller.pause_playback()?,
+                            _ => socket_controller.start_playback()?
                         }
                     }
                     termion::event::Key::Char('\t') => {
                         // Tab
-                        socket_controller.skip_playback().unwrap();
+                        socket_controller.skip_playback()?;
                     }
                     termion::event::Key::Char('\n') => {
                         match tab_select {
@@ -173,14 +191,14 @@ impl TerminalUi
                                 if queue_tab_element.table_list_size != 0 {
                                     let pos = queue_tab_element.table_list_pos;
                                     let queue_elem = queue_list[pos].clone();
-                                    socket_controller.promote_entry(queue_elem.id).unwrap();
+                                    socket_controller.promote_entry(queue_elem.id)?;
                                 }
                             },
                             1 => {
                                 if history_tab_element.table_list_size != 0 {
                                     let pos = history_tab_element.table_list_pos;
                                     let history_element = history_entries[pos].clone();
-                                    socket_controller.add_entry(EntryType::LocalMedia, history_element.location, DEFAULT_PRIORITY).unwrap();
+                                    socket_controller.add_entry(history_element.location, DEFAULT_PRIORITY, false)?;
                                 }
                             },
                             _ => {},
@@ -193,9 +211,6 @@ impl TerminalUi
                 last_tick = Instant::now();
                 self.terminal.draw(|f| {
                     let size = f.size();
-                    let block = Block::default()
-                        .title("Fantastic box")
-                        .borders(Borders::ALL);
 
                     let chunks = Layout::default()
                     .direction(Direction::Vertical)
@@ -276,7 +291,7 @@ impl TerminalUi
                     let mut rows_history = vec![];
 
                     for entry in history_entries {
-                        let mut style  = Style::default().fg(Color::Gray);
+                        let style  = Style::default().fg(Color::Gray);
                         rows_history.push(Row::new(vec![entry.timestamp, entry.name, entry.location]).style(style))
                     }
                     
@@ -297,6 +312,8 @@ impl TerminalUi
                         Spans::from(Span::styled("↑/↓: Move up and down in lists", Style::default().fg(Color::Gray))),
                         Spans::from(Span::styled("Pageup/Pagedown: Jump up and down in lists", Style::default().fg(Color::Gray))),
                         Spans::from(Span::styled("Space: Play/Pause playing media", Style::default().fg(Color::Gray))),
+                        Spans::from(Span::styled("Delete or r: Removes entry from queue", Style::default().fg(Color::Gray))),
+                        Spans::from(Span::styled("Ctrl-r: Clears entire queue", Style::default().fg(Color::Gray))),
                         Spans::from(Span::styled("Enter: (Queue)Jump to or add to entry (History)", Style::default().fg(Color::Gray))),
                     ];
                     let help_block = Paragraph::new(help_text)
@@ -318,7 +335,7 @@ impl TerminalUi
                         3 => f.render_widget(help_block, chunks[4]),
                         _ => {},
                     }
-                }).unwrap();
+                })?;
             }
         }
     }

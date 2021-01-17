@@ -20,7 +20,7 @@ impl TabsElements {
     }
     pub fn pos_jump_up(&mut self, num: usize) -> (){
         if self.table_list_pos > 0 && self.table_list_pos > num {
-            self.table_list_pos = self.table_list_pos - num;
+            self.table_list_pos = self.table_list_pos.saturating_sub(num);
             if self.table_list_pos == 0 {
                 self.table_list_pos = 0;
             }
@@ -36,7 +36,7 @@ impl TabsElements {
         debug!("Setting {} table_list_pos to {}", self.display_name, self.table_list_pos);
     }
     pub fn pos_jump_down(&mut self, num: usize) -> (){
-        if self.table_list_pos < self.table_list_size &&  self.table_list_pos < self.table_list_size - num{
+        if self.table_list_pos < self.table_list_size &&  self.table_list_pos < self.table_list_size.saturating_sub(num){
             self.table_list_pos = self.table_list_pos + num;
             if self.table_list_pos == self.table_list_size {
                 self.table_list_pos = self.table_list_size;
@@ -48,6 +48,9 @@ impl TabsElements {
     }
     pub fn update_size(&mut self, size: usize) -> (){
         self.table_list_size = size;
+        if self.table_list_pos > self.table_list_size {
+            self.table_list_pos = self.table_list_size;
+        }
         trace!("Setting {} table_list_size to {}", self.display_name, self.table_list_size);
     }
 

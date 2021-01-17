@@ -67,7 +67,7 @@ impl HistoryWatcher {
             }
 
             let types: Vec<&str> = line.splitn(3,'\t').collect(); // We expect 3 fields separated by TAB
-            if (types.len() < 3){
+            if types.len() < 3 {
                 continue;
             }
 
@@ -81,7 +81,7 @@ impl HistoryWatcher {
             entries.push(HistoryLogEntry{ timestamp : timestamp_str, name: types[1].to_string(), location: types[2].to_string()});
             
             lines_read += 1;
-            if (lines_read >= num_lines_to_read){
+            if lines_read >= num_lines_to_read {
                 break;
             }
         }

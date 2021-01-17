@@ -1,16 +1,4 @@
 use std::io;
-use termion::raw::IntoRawMode;
-use tui::Terminal;
-use tui::backend::TermionBackend;
-use tui::widgets::{Widget, Block, Borders, Gauge};
-use tui::style::{Color, Modifier, Style};
-use tui::layout::{Layout, Constraint, Direction};
-
-use termion::event::Key;
-use termion::input::TermRead;
-
-use std::path;
-use std::fs::metadata;
 
 mod status_watcher;
 mod terminal_ui;
@@ -26,9 +14,8 @@ use log4rs::config::{Appender, Config, Logger, Root};
 
 use clap::{Arg, App, SubCommand};
 use dirs::home_dir;
-use youtube_dl::YoutubeDl;
 
-use crate::socket_com::{SocketCom, EntryType, DEFAULT_PRIORITY};
+use crate::socket_com::{SocketCom, DEFAULT_PRIORITY};
 
 fn init_log(log_file_name : &str) -> () {
     let logfile = FileAppender::builder()
@@ -37,12 +24,12 @@ fn init_log(log_file_name : &str) -> () {
 
     let config = Config::builder()
         .appender(Appender::builder().build("logfile", Box::new(logfile)))
-        .logger(Logger::builder().build("rustysm::status_watcher", LevelFilter::Debug))
-        .logger(Logger::builder().build("rustysm::terminal_ui", LevelFilter::Debug))
-        .logger(Logger::builder().build("rustysm::history_watcher", LevelFilter::Debug))
-        .logger(Logger::builder().build("rustysm::alsa_controller", LevelFilter::Debug))
-        .logger(Logger::builder().build("rustysm::tab_elements", LevelFilter::Debug))
-        .logger(Logger::builder().build("rustysm::socket_com", LevelFilter::Trace))
+        .logger(Logger::builder().build("rustysm::status_watcher", LevelFilter::Info))
+        .logger(Logger::builder().build("rustysm::terminal_ui", LevelFilter::Info))
+        .logger(Logger::builder().build("rustysm::history_watcher", LevelFilter::Info))
+        .logger(Logger::builder().build("rustysm::alsa_controller", LevelFilter::Info))
+        .logger(Logger::builder().build("rustysm::tab_elements", LevelFilter::Info))
+        .logger(Logger::builder().build("rustysm::socket_com", LevelFilter::Info))
         .build(Root::builder()
                 .appender("logfile")
                 
@@ -73,6 +60,11 @@ fn main() -> Result<(), io::Error> {
                         .long("priority")
                         .takes_value(true)
                         .help("Set priority of the queued file"))
+                .arg(Arg::with_name("raw")
+                        .short("r")
+                        .long("raw")
+                        .takes_value(false)
+                        .help("Forward input as is without parsing. Useful to play streams and such through mpv"))
                 .arg(Arg::with_name("QueueFile")
                         .required(false)
                         .index(1)
@@ -85,35 +77,20 @@ fn main() -> Result<(), io::Error> {
             tickrate = args.value_of("tickrate").unwrap().parse::<u64>().unwrap();
         }
         let mut ui = terminal_ui::TerminalUi::new()?;
-        ui.start_draw(tickrate);
+        ui.start_draw(tickrate).unwrap();
     }
     if args.is_present("QueueFile") {
         let tbq = args.value_of("QueueFile").unwrap();
-        println!("Trying to queue {}", tbq);
+        println!("Trying to add: {}", tbq);
         let mut priority = DEFAULT_PRIORITY;
         if args.is_present("priority") {
             priority = args.value_of("priority").unwrap().parse::<u64>().unwrap();
         }
         let mut socket_controller = SocketCom::new().unwrap();
-        let md = metadata(tbq);
-        if md.is_ok() {
-            let meta_data = md.unwrap();
-            if meta_data.is_file() || meta_data.is_dir(){
-                socket_controller.add_entry(EntryType::LocalMedia, tbq.to_string(), priority).unwrap();
-            } else {
-                println!("This is not a path or direcotry {:?}", tbq);
-            }
-        } else {
-            let is_youtube = YoutubeDl::new(tbq)
-                .socket_timeout("5")
-                .run();
-            if is_youtube.is_ok() {
-                socket_controller.add_entry(EntryType::YoutubeMedia, tbq.to_string(), priority).unwrap();
-            } else {
-                println!("Not recognized input file/url");
-            }
-        } 
-        
+        socket_controller.add_entry(tbq.to_string(), priority, args.is_present("raw")).unwrap();
+
+    } else {
+        println!("No input provided, consider trying --help");
     }
     Ok(())
 } 
