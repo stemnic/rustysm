@@ -78,8 +78,7 @@ fn main() -> Result<(), io::Error> {
         }
         let mut ui = terminal_ui::TerminalUi::new()?;
         ui.start_draw(tickrate).unwrap();
-    }
-    if args.is_present("QueueFile") {
+    } else if args.is_present("QueueFile") {
         let tbq = args.value_of("QueueFile").unwrap();
         println!("Trying to add: {}", tbq);
         let mut priority = DEFAULT_PRIORITY;
