@@ -44,7 +44,7 @@ struct Message {
 pub struct SocketCom{
 
 }
-const DEFAULT_PRIORITY: u64 = 50;
+pub const DEFAULT_PRIORITY: u64 = 50;
 
 impl SocketCom{
     pub fn new() -> Result<Self, io::Error> {
@@ -109,7 +109,7 @@ impl SocketCom{
         self.send_message(tbs_message)?;
         Ok(())
     }
-    pub fn add_entry(&mut self, entry_type : EntryType, entry : String) -> Result<(), io::Error> {
+    pub fn add_entry(&mut self, entry_type : EntryType, entry : String, priority : u64) -> Result<(), io::Error> {
         let mut tbs_data: Vec<u8> = vec![];
         let entry_clone = entry.clone();
         debug!("Adding entry {:?} {}", entry_type, entry);
@@ -121,7 +121,7 @@ impl SocketCom{
                     for byte in entry_clone.as_bytes() {
                         tbs_data.push(*byte);
                     }
-                    let tbs_message = Message{Type: MessageType::QueueEntryRequest, Priority: DEFAULT_PRIORITY, Data: tbs_data};
+                    let tbs_message = Message{Type: MessageType::QueueEntryRequest, Priority: priority, Data: tbs_data};
                     self.send_message(tbs_message)?;
                 } else {
                     return Err(io::Error::new(io::ErrorKind::InvalidData, "md is not a file"))

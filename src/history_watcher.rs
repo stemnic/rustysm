@@ -28,6 +28,8 @@ use std::time::{SystemTime, UNIX_EPOCH, Duration};
 // Logging
 use log::{error, info, warn, debug};
 
+pub const DEFAULT_HISTORY_ENTRIES_TO_FETCH: u64 = 100;
+
 #[derive(Debug, Clone)]
 pub struct HistoryLogEntry {
     pub timestamp: String,
