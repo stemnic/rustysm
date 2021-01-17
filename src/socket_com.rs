@@ -2,6 +2,8 @@ use std::io;
 use std::os::unix::net::UnixStream;
 use std::io::prelude::*;
 use std::fs::metadata;
+use std::fs;
+use std::path::PathBuf;
 
 use youtube_dl::{YoutubeDl, YoutubeDlOutput};
 
@@ -167,7 +169,9 @@ impl SocketCom{
             EntryType::LocalMedia => {
                 let mut tbs_data: Vec<u8> = vec![];
                 tbs_data.push(EntryType::LocalMedia as u8);
-                for byte in entry_clone.as_bytes() {
+                let fullpath = fs::canonicalize(PathBuf::from(&entry_clone))?;
+                let fullpath_string = fullpath.into_os_string().into_string().unwrap();
+                for byte in fullpath_string.as_bytes() {
                     tbs_data.push(*byte);
                 }
                 let tbs_message = Message{Type: MessageType::QueueEntryRequest, Priority: priority, Data: tbs_data};
