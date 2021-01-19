@@ -87,7 +87,10 @@ impl TerminalUi
                 queue_size = queue_list.len()-1;
             }
             queue_tab_element.update_size(queue_size);
-            self.history_log.read(DEFAULT_HISTORY_ENTRIES_TO_FETCH,0)?; // TODO: Have history make a notification when you need to update it
+            match self.history_log.read(DEFAULT_HISTORY_ENTRIES_TO_FETCH,0){
+                Ok(_) => {},
+                Err(error) => {warn!("Failed to read history log, error: {}", error)}
+            }; // TODO: Have history make a notification when you need to update it
             let history_entries = self.history_log.entries.clone();
             history_tab_element.update_size(history_entries.len()-1);
 
