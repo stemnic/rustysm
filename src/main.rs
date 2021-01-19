@@ -40,9 +40,6 @@ fn init_log(log_file_name : &str) -> () {
 }
 
 fn main() -> Result<(), io::Error> {
-    let mut log_path = home_dir().unwrap();
-    log_path.push(".rusty_log.log");
-    init_log(&log_path.into_os_string().into_string().unwrap());
     let args = App::new("Rustysm")
                 .version("0.1.1")
                 .author("Ole Sivert Aarhaug <ole.sivert@gmail.com>, Tore Mattias Apeland <turtlesmoker@gmail.com>")
@@ -57,6 +54,11 @@ fn main() -> Result<(), io::Error> {
                         .long("tickrate")
                         .takes_value(true)
                         .help("Adjusts the tickrate in ms of gui if terminal has a slow refresh rate"))
+                .arg(Arg::with_name("logfile")
+                        .short("l")
+                        .long("logfile")
+                        .takes_value(true)
+                        .help("Path to desired placement of client logfile"))
                 .arg(Arg::with_name("history_file")
                         .short("hist")
                         .long("history_file")
@@ -77,6 +79,13 @@ fn main() -> Result<(), io::Error> {
                         .index(1)
                         .help("Media file to add to queue"))
                 .get_matches();
+    let mut log_path = home_dir().unwrap();
+    if args.is_present("logfile") {
+        log_path = std::path::PathBuf::from(args.value_of("logfile").unwrap())
+    }else{
+        log_path.push(".sm_client.log");
+    }
+    init_log(&log_path.into_os_string().into_string().unwrap());
     log::info!("-----------------------------------------\n\n\nStarting great program, just for you!!");
     if args.is_present("gui") {
         let mut tickrate = 10;
