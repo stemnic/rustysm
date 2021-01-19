@@ -40,13 +40,13 @@ pub struct TerminalUi
 
 impl TerminalUi 
 {
-    pub fn new() -> Result<Self, io::Error> {
+    pub fn new(history_file_path: String) -> Result<Self, io::Error> {
         let stdout = io::stdout().into_raw_mode()?;
         let backend = TermionBackend::new(stdout);
         let terminal_backend = Terminal::new(backend)?;
         let mut tui_ui = TerminalUi { terminal: terminal_backend , 
                                     current_status: StatusWatcher::new(path::PathBuf::from("/tmp/smqueue.status"), path::PathBuf::from("/tmp/smqueue.queue"))?,
-                                    history_log : HistoryWatcher::new(path::PathBuf::from("/tmp/smqueue.history"))? 
+                                    history_log : HistoryWatcher::new(path::PathBuf::from(history_file_path))? 
         };
         tui_ui.current_status.start();
         tui_ui.terminal.clear()?;
@@ -198,7 +198,11 @@ impl TerminalUi
                                 if history_tab_element.table_list_size != 0 {
                                     let pos = history_tab_element.table_list_pos;
                                     let history_element = history_entries[pos].clone();
-                                    socket_controller.add_entry(history_element.location, DEFAULT_PRIORITY, false)?;
+                                    // Should provide some propper feedback to the user
+                                    match socket_controller.add_entry(history_element.location.clone(), DEFAULT_PRIORITY, false) {
+                                        Ok(_) => {},
+                                        Err(value) => warn!("Could not queue history entry {} Error: {} ", history_element.location, value)
+                                    };
                                 }
                             },
                             _ => {},

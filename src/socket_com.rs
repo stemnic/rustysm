@@ -32,7 +32,8 @@ enum EntryType {
 	YoutubeMedia = 0,
 	FileStream,
 	LocalMedia,
-	Command
+    Command,
+    Unknown
 }
 
 
@@ -136,11 +137,11 @@ impl SocketCom{
         self.send_message(tbs_message)?;
         Ok(())
     }
-    pub fn add_entry(&mut self, entry : String, priority : u64, raw : bool) -> Result<(), io::Error> {
+    pub fn add_entry(&mut self, entry : String, priority : u64, raw : bool) -> Result<String, io::Error> {
         // Should do parsing to identify if it is a youtube video or not
         let entry_clone = entry.clone();
         let md = metadata(&entry_clone);
-        let mut entry_type = EntryType::FileStream;
+        let mut entry_type = EntryType::Unknown;
         let mut youtube_obj : Option<youtube_dl::YoutubeDlOutput> = None;
         if md.is_ok() {
             let meta_data = md.unwrap();
@@ -176,6 +177,7 @@ impl SocketCom{
                 }
                 let tbs_message = Message{Type: MessageType::QueueEntryRequest, Priority: priority, Data: tbs_data};
                 self.send_message(tbs_message)?;
+                Ok("Added ".to_string() + &fullpath_string)
             }
             EntryType::YoutubeMedia => {
                 let video_object = youtube_obj.unwrap();
@@ -194,17 +196,20 @@ impl SocketCom{
                         debug!("Youtube playlist object");
                     }
                 }
+                let mut feedback_message: String = "".to_string();
                 for video in video_array {
                     let mut tbs_data: Vec<u8> = vec![];
                     tbs_data.push(EntryType::YoutubeMedia as u8);
                     let tbs_id_string = (*video.id).to_string() + " - " + &(*video.title);
                     debug!("Youtube video add {}", &tbs_id_string);
+                    feedback_message = feedback_message + "Added Youtube video " + &(*video.title) + "\n";
                     for byte in tbs_id_string.as_bytes() {
                         tbs_data.push(*byte);
                     }
                     let tbs_message = Message{Type: MessageType::QueueEntryRequest, Priority: priority, Data: tbs_data};
                     self.send_message(tbs_message)?;
                 }
+                Ok(feedback_message)
             }
             EntryType::FileStream => {
                 let mut tbs_data: Vec<u8> = vec![];
@@ -214,9 +219,9 @@ impl SocketCom{
                 }
                 let tbs_message = Message{Type: MessageType::QueueEntryRequest, Priority: priority, Data: tbs_data};
                 self.send_message(tbs_message)?;
+                Ok("Pushed '".to_string() + &entry + "' as a filestream")
             }
             _ => {return Err(io::Error::new(io::ErrorKind::InvalidInput, "Not supported entry type"))}
         }
-        Ok(())
     }
 }
