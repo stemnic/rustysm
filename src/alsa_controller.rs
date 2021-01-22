@@ -1,15 +1,17 @@
 use std::io;
 use alsa::mixer;
 use alsa::Round;
+use alsa::Ctl;
 use std::io::{Error, ErrorKind};
 use log::{error, info, warn, debug, trace};
+use std::sync::mpsc::channel;
 
-#[derive(Debug)]
 pub struct AlsaController {
     current_volume_db_percentage: f32,
     current_volume_db: f32,
     volume_max_db: f32,
     volume_min_db: f32,
+    alsa_event_rx: std::sync::mpsc::Receiver<String>
 }
 
 fn get_normalized_volume(min: f32, max: f32, value: f32) -> f32{
@@ -30,8 +32,28 @@ impl AlsaController
             // create struct
             // update volume
         debug!("AlsaController Init");
-        let mut sys_control = AlsaController { current_volume_db_percentage: 0.0, current_volume_db: 0.0, volume_max_db: 0.0, volume_min_db: 0.0 };
+        let (alsa_event_tx, alsa_event_rx) = channel();
+        let mut sys_control = AlsaController { current_volume_db_percentage: 0.0, current_volume_db: 0.0, volume_max_db: 0.0, volume_min_db: 0.0, alsa_event_rx: alsa_event_rx };
         sys_control.update_volume().unwrap();
+        std::thread::spawn(move || {
+            let alsa_ctrl = Ctl::new("hw:0", false).unwrap();
+            alsa_ctrl.subscribe_events(true).unwrap();
+            loop{
+                let event = alsa_ctrl.read().unwrap().unwrap();
+                let elem_id = event.get_id();
+                let elem_interface = elem_id.get_interface();
+                match elem_id.get_name() {
+                    Ok(name) => {
+                        alsa_event_tx.send(name.to_string());
+                        debug!("Got alsa card event {:?} {:?}", name, elem_interface);
+                    }
+                    Err(_) => {warn!("Alsa event error occured")}
+                };
+
+                
+            }
+            
+        });
         Ok(sys_control)
     }
 
@@ -43,6 +65,18 @@ impl AlsaController
         self.current_volume_db = mixer_channel.get_playback_vol_db(mixer::SelemChannelId::Last).unwrap().to_db();
         self.current_volume_db_percentage = 1.0 - (self.current_volume_db / mixer_db_min.to_db());
         debug!("Read current alsa volume as {}dB ({}%)", self.current_volume_db, self.current_volume_db_percentage * 100.0);
+    }
+
+    pub fn wait_for_volume_event(&mut self) -> Result<bool, io::Error> {
+        match self.alsa_event_rx.try_recv() {
+            Ok(event_string) => {
+                match event_string.as_str() {
+                    "Master Playback Volume" => Ok(true),
+                    _ => Ok(false)
+                }
+            },
+            Err(_) => Ok(false)
+        }
     }
 
     pub fn update_volume(&mut self) -> Result<(), io::Error>{
