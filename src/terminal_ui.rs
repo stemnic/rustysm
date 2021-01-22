@@ -13,6 +13,7 @@ use std::{path, thread};
 use std::sync::mpsc::*;
 use std::time::{Duration, Instant};
 
+
 use termion::event::Key;
 use termion::input::TermRead;
 
@@ -74,7 +75,6 @@ impl TerminalUi
         let mut history_tab_element = TabsElements::new("History 📜")?;
 
         let tick_rate = Duration::from_millis(tick_rate);
-        let mut last_tick = Instant::now();
 
         loop{
 
@@ -120,11 +120,11 @@ impl TerminalUi
                             tab_select = tab_select - 1;
                         }
                     }
-                    termion::event::Key::Char('+') => {
+                    termion::event::Key::Char('+') | termion::event::Key::Char('k') => {
                         alsa_controller.volume_increment_db(1)?;
                     }
 
-                    termion::event::Key::Char('-') => {
+                    termion::event::Key::Char('-') | termion::event::Key::Char('j') => {
                         alsa_controller.volume_decrement_db(1)?;
                     }
 
@@ -214,136 +214,134 @@ impl TerminalUi
                     _ => {}
                 }
             }
-            if last_tick.elapsed() >= tick_rate {
-                last_tick = Instant::now();
-                self.terminal.draw(|f| {
-                    let size = f.size();
+            self.terminal.draw(|f| {
+                let size = f.size();
 
-                    let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(3),
-                        Constraint::Length(2),
-                        Constraint::Length(1),
-                        Constraint::Length(3),
-                        Constraint::Percentage(80),
-                    ].as_ref())
-                    .split(f.size());
+                let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(3),
+                    Constraint::Length(2),
+                    Constraint::Length(1),
+                    Constraint::Length(3),
+                    Constraint::Percentage(80),
+                ].as_ref())
+                .split(f.size());
 
-                    let playback_gauge = LineGauge::default()
-                        .block(Block::default().borders(Borders::BOTTOM).title(playback_state.to_string()))
-                        .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
-                        .line_set(symbols::line::ROUNDED)
-                        .ratio((playback_percentage as f64)/100.0);
-                    f.render_widget(playback_gauge, chunks[0]);
+                let playback_gauge = LineGauge::default()
+                    .block(Block::default().borders(Borders::BOTTOM).title(playback_state.to_string()))
+                    .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
+                    .line_set(symbols::line::ROUNDED)
+                    .ratio((playback_percentage as f64)/100.0);
+                f.render_widget(playback_gauge, chunks[0]);
 
-                    let volume_gauge = LineGauge::default()
-                        .block(Block::default().borders(Borders::NONE).title("Volume 🔊 ".to_string() + &alsa_controller.get_description_str() ))
-                        .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
-                        .line_set(symbols::line::ROUNDED)
-                        .ratio(alsa_controller.get_human_ear_volume_normalized());
-                    f.render_widget(volume_gauge, chunks[1]);
-                    
-                    let paragraph = Paragraph::new("👉👉👉🆘 h, 4, F1 or ? for help 🆘👈👈👈".to_string())
+                let volume_gauge = LineGauge::default()
+                    .block(Block::default().borders(Borders::NONE).title("Volume 🔊 ".to_string() + &alsa_controller.get_description_str() ))
+                    .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
+                    .line_set(symbols::line::ROUNDED)
+                    .ratio(alsa_controller.get_human_ear_volume_normalized());
+                f.render_widget(volume_gauge, chunks[1]);
+                
+                let paragraph = Paragraph::new("👉👉👉🆘 h, 4, F1 or ? for help 🆘👈👈👈".to_string())
+                    .style(Style::default().fg(Color::Yellow))
+                    .alignment(Alignment::Left)
+                    .wrap(Wrap { trim: true });
+                f.render_widget(paragraph, chunks[2]);
+
+                
+                let titles = [&queue_tab_element.display_name, &history_tab_element.display_name, "lalala", "Help ❓"].iter().cloned().map(Spans::from).collect();
+                let tabs = Tabs::new(titles)
+                    .block(Block::default().borders(Borders::ALL))
+                    .style(Style::default().fg(Color::White))
+                    .select(tab_select)
+                    .highlight_style(Style::default().fg(Color::Yellow))
+                    .divider(symbols::line::VERTICAL);
+                f.render_widget(tabs, chunks[3]);
+
+
+                let mut rows = vec![];
+                let mut first = true;
+
+                for line in queue_list {
+                    let mut style  = Style::default().fg(Color::Gray);
+                    if first {
+                        style  = Style::default().fg(Color::Yellow);
+                        first = false;
+                    }
+                    rows.push(Row::new(vec![line.priority.to_string(), line.entry_type, line.file_location]).style(style))
+                }
+                
+                let table = Table::new(rows)
+                // You can set the style of the entire Table.
+                .style(Style::default().fg(Color::White))
+                // It has an optional header, which is simply a Row always visible at the top.
+                .header(
+                    Row::new(vec!["Pri", "Type", "Location"])
                         .style(Style::default().fg(Color::Yellow))
-                        .alignment(Alignment::Left)
-                        .wrap(Wrap { trim: true });
-                    f.render_widget(paragraph, chunks[2]);
+                        // If you want some space between the header and the rest of the rows, you can always
+                        // specify some margin at the bottom.
+                        .bottom_margin(1)
+                )
+                // As any other widget, a Table can be wrapped in a Block.
+                .block(Block::default().borders(Borders::ALL).title("Queue 🤔🤔🤔🤔🤔"))
+                // Columns widths are constrained in the same way as Layout...
+                .widths(&[Constraint::Percentage(3), Constraint::Percentage(13), Constraint::Percentage(84)])
+                // ...and they can be separated by a fixed spacing.
+                .column_spacing(1)
+                // If you wish to highlight a row in any specific way when it is selected...
+                .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+                // ...and potentially show a symbol in front of the selection.
+                .highlight_symbol("👉");
 
-                    
-                    let titles = [&queue_tab_element.display_name, &history_tab_element.display_name, "lalala", "Help ❓"].iter().cloned().map(Spans::from).collect();
-                    let tabs = Tabs::new(titles)
-                        .block(Block::default().borders(Borders::ALL))
-                        .style(Style::default().fg(Color::White))
-                        .select(tab_select)
-                        .highlight_style(Style::default().fg(Color::Yellow))
-                        .divider(symbols::line::VERTICAL);
-                    f.render_widget(tabs, chunks[3]);
+                let mut rows_history = vec![];
 
-
-                    let mut rows = vec![];
-                    let mut first = true;
-
-                    for line in queue_list {
-                        let mut style  = Style::default().fg(Color::Gray);
-                        if first {
-                            style  = Style::default().fg(Color::Yellow);
-                            first = false;
-                        }
-                        rows.push(Row::new(vec![line.priority.to_string(), line.entry_type, line.file_location]).style(style))
-                    }
-                    
-                    let table = Table::new(rows)
-                    // You can set the style of the entire Table.
-                    .style(Style::default().fg(Color::White))
-                    // It has an optional header, which is simply a Row always visible at the top.
-                    .header(
-                        Row::new(vec!["Pri", "Type", "Location"])
-                            .style(Style::default().fg(Color::Yellow))
-                            // If you want some space between the header and the rest of the rows, you can always
-                            // specify some margin at the bottom.
-                            .bottom_margin(1)
-                    )
-                    // As any other widget, a Table can be wrapped in a Block.
-                    .block(Block::default().borders(Borders::ALL).title("Queue 🤔🤔🤔🤔🤔"))
-                    // Columns widths are constrained in the same way as Layout...
-                    .widths(&[Constraint::Percentage(3), Constraint::Percentage(13), Constraint::Percentage(84)])
-                    // ...and they can be separated by a fixed spacing.
-                    .column_spacing(1)
-                    // If you wish to highlight a row in any specific way when it is selected...
-                    .highlight_style(Style::default().add_modifier(Modifier::BOLD))
-                    // ...and potentially show a symbol in front of the selection.
-                    .highlight_symbol("👉");
-
-                    let mut rows_history = vec![];
-
-                    for entry in history_entries {
-                        let style  = Style::default().fg(Color::Gray);
-                        rows_history.push(Row::new(vec![entry.timestamp, entry.name, entry.location]).style(style))
-                    }
-                    
-                    let table_history = Table::new(rows_history)
-                    .style(Style::default().fg(Color::White))
-                    .header(
-                        Row::new(vec!["Timestamp", "Name", "Location"])
-                            .style(Style::default().fg(Color::Yellow))
-                            .bottom_margin(1)
-                    )
-                    .block(Block::default().borders(Borders::ALL).title("History 📜"))
-                    .widths(&[Constraint::Percentage(10), Constraint::Percentage(45), Constraint::Percentage(45)])
-                    .column_spacing(1).highlight_style(Style::default().add_modifier(Modifier::BOLD)).highlight_symbol("👉");
-                    let help_text = vec![
-                        Spans::from(Span::styled("←/→ or Use the number row to go between tabs", Style::default().fg(Color::Gray))),
-                        Spans::from(Span::styled("+/-: Adjusts volume on the system", Style::default().fg(Color::Gray))),
-                        Spans::from(Span::styled("Esc/q/Ctrl-c: Quits this rusty application", Style::default().fg(Color::Gray))),
-                        Spans::from(Span::styled("↑/↓: Move up and down in lists", Style::default().fg(Color::Gray))),
-                        Spans::from(Span::styled("Pageup/Pagedown: Jump up and down in lists", Style::default().fg(Color::Gray))),
-                        Spans::from(Span::styled("Space: Play/Pause playing media", Style::default().fg(Color::Gray))),
-                        Spans::from(Span::styled("Delete or r: Removes entry from queue", Style::default().fg(Color::Gray))),
-                        Spans::from(Span::styled("Ctrl-r: Clears entire queue", Style::default().fg(Color::Gray))),
-                        Spans::from(Span::styled("Enter: (Queue)Jump to or add to entry (History)", Style::default().fg(Color::Gray))),
-                    ];
-                    let help_block = Paragraph::new(help_text)
-                        .block(Block::default().title("Help me").borders(Borders::ALL))
-                        .style(Style::default().fg(Color::White).bg(Color::Black))
-                        .alignment(Alignment::Left)
-                        .wrap(Wrap { trim: true });
-                    match tab_select {
-                        0 => {
-                            let mut state = TableState::default();
-                            state.select(Some(queue_tab_element.table_list_pos));
-                            f.render_stateful_widget(table, chunks[4], &mut state)
-                        },
-                        1 => {
-                            let mut state = TableState::default();
-                            state.select(Some(history_tab_element.table_list_pos));
-                            f.render_stateful_widget(table_history, chunks[4], &mut state)
-                        },
-                        3 => f.render_widget(help_block, chunks[4]),
-                        _ => {},
-                    }
-                })?;
-            }
+                for entry in history_entries {
+                    let style  = Style::default().fg(Color::Gray);
+                    rows_history.push(Row::new(vec![entry.timestamp, entry.name, entry.location]).style(style))
+                }
+                
+                let table_history = Table::new(rows_history)
+                .style(Style::default().fg(Color::White))
+                .header(
+                    Row::new(vec!["Timestamp", "Name", "Location"])
+                        .style(Style::default().fg(Color::Yellow))
+                        .bottom_margin(1)
+                )
+                .block(Block::default().borders(Borders::ALL).title("History 📜"))
+                .widths(&[Constraint::Percentage(10), Constraint::Percentage(45), Constraint::Percentage(45)])
+                .column_spacing(1).highlight_style(Style::default().add_modifier(Modifier::BOLD)).highlight_symbol("👉");
+                let help_text = vec![
+                    Spans::from(Span::styled("←/→ or Use the number row to go between tabs", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("+/-: Adjusts volume on the system", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("Esc/q/Ctrl-c: Quits this rusty application", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("↑/↓: Move up and down in lists", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("Pageup/Pagedown: Jump up and down in lists", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("Space: Play/Pause playing media", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("Delete or r: Removes entry from queue", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("Ctrl-r: Clears entire queue", Style::default().fg(Color::Gray))),
+                    Spans::from(Span::styled("Enter: (Queue)Jump to or add to entry (History)", Style::default().fg(Color::Gray))),
+                ];
+                let help_block = Paragraph::new(help_text)
+                    .block(Block::default().title("Help me").borders(Borders::ALL))
+                    .style(Style::default().fg(Color::White).bg(Color::Black))
+                    .alignment(Alignment::Left)
+                    .wrap(Wrap { trim: true });
+                match tab_select {
+                    0 => {
+                        let mut state = TableState::default();
+                        state.select(Some(queue_tab_element.table_list_pos));
+                        f.render_stateful_widget(table, chunks[4], &mut state)
+                    },
+                    1 => {
+                        let mut state = TableState::default();
+                        state.select(Some(history_tab_element.table_list_pos));
+                        f.render_stateful_widget(table_history, chunks[4], &mut state)
+                    },
+                    3 => f.render_widget(help_block, chunks[4]),
+                    _ => {},
+                }
+            })?;
+            thread::sleep(tick_rate);
         }
     }
 

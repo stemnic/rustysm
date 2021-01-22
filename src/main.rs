@@ -41,7 +41,7 @@ fn init_log(log_file_name : &str) -> () {
 
 fn main() -> Result<(), io::Error> {
     let args = App::new("Rustysm")
-                .version("0.1.1")
+                .version("0.1.2")
                 .author("Ole Sivert Aarhaug <ole.sivert@gmail.com>, Tore Mattias Apeland <turtlesmoker@gmail.com>")
                 .about("Rustyshowmovie allows you to queue and play videoes and other media files")
                 .arg(Arg::with_name("gui")
@@ -88,7 +88,7 @@ fn main() -> Result<(), io::Error> {
     init_log(&log_path.into_os_string().into_string().unwrap());
     log::info!("-----------------------------------------\n\n\nStarting great program, just for you!!");
     if args.is_present("gui") {
-        let mut tickrate = 10;
+        let mut tickrate = 100;
         let mut home_path = home_dir().unwrap();
         home_path.push(".sm_history");
         let mut history_file_path = home_path.into_os_string().into_string().unwrap();
