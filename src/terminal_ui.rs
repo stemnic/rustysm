@@ -220,6 +220,8 @@ impl TerminalUi
                 queue_list = self.current_status.status_info.lock().unwrap().entry_list.clone();
                 playback_state = self.current_status.status_info.lock().unwrap().playback_state.clone();
 
+                alsa_controller.update_volume();
+
                 let mut queue_size = 0;
                 if queue_list.len() > 0 {
                     queue_size = queue_list.len()-1;
