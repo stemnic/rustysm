@@ -41,7 +41,7 @@ fn init_log(log_file_name : &str) -> () {
 
 fn main() -> Result<(), io::Error> {
     let args = App::new("Rustysm")
-                .version("0.1.3")
+                .version("0.1.4")
                 .author("Ole Sivert Aarhaug <ole.sivert@gmail.com>, Tore Mattias Apeland <turtlesmoker@gmail.com>")
                 .about("Rustyshowmovie allows you to queue and play videoes and other media files")
                 .arg(Arg::with_name("gui")

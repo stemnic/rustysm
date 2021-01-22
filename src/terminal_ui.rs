@@ -47,9 +47,10 @@ impl TerminalUi
         let terminal_backend = Terminal::new(backend)?;
         let mut tui_ui = TerminalUi { terminal: terminal_backend , 
                                     current_status: StatusWatcher::new(path::PathBuf::from("/tmp/smqueue.status"), path::PathBuf::from("/tmp/smqueue.queue"))?,
-                                    history_log : HistoryWatcher::new(path::PathBuf::from(history_file_path))? 
+                                    history_log : HistoryWatcher::new(path::PathBuf::from(history_file_path), DEFAULT_HISTORY_ENTRIES_TO_FETCH, 0)? 
         };
         tui_ui.current_status.start();
+        tui_ui.history_log.start();
         tui_ui.terminal.clear()?;
         Ok(tui_ui)
     }
@@ -193,7 +194,7 @@ impl TerminalUi
                             1 => {
                                 if history_tab_element.table_list_size != 0 {
                                     let pos = history_tab_element.table_list_pos;
-                                    let history_entries = self.history_log.entries.clone();
+                                    let history_entries = self.history_log.get_history();
                                     let history_element = history_entries[pos].clone();
                                     // Should provide some propper feedback to the user
                                     match socket_controller.add_entry(history_element.location.clone(), DEFAULT_PRIORITY, false) {
@@ -209,7 +210,7 @@ impl TerminalUi
                 }
             }
 
-            if self.current_status.check_for_status_change() || alsa_controller.wait_for_volume_event() {
+            if self.current_status.check_for_status_change() || self.history_log.check_for_status_change() || alsa_controller.wait_for_volume_event() {
                 update_screen = true;
             }
 
@@ -224,12 +225,12 @@ impl TerminalUi
                     queue_size = queue_list.len()-1;
                 }
                 queue_tab_element.update_size(queue_size);
-                match self.history_log.read(DEFAULT_HISTORY_ENTRIES_TO_FETCH,0){
-                    Ok(_) => {},
-                    Err(error) => {warn!("Failed to read history log, error: {}", error)}
-                }; // TODO: Have history make a notification when you need to update it
-                let history_entries = self.history_log.entries.clone();
-                history_tab_element.update_size(history_entries.len()-1);
+                let history_entries = self.history_log.get_history();
+                let mut history_size = 0;
+                if history_entries.len() > 0 {
+                    history_size = history_entries.len()-1;
+                }
+                history_tab_element.update_size(history_size);
 
                 self.terminal.draw(|f| {
                     let size = f.size();
