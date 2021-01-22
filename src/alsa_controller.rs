@@ -67,15 +67,15 @@ impl AlsaController
         debug!("Read current alsa volume as {}dB ({}%)", self.current_volume_db, self.current_volume_db_percentage * 100.0);
     }
 
-    pub fn wait_for_volume_event(&mut self) -> Result<bool, io::Error> {
+    pub fn wait_for_volume_event(&mut self) -> bool {
         match self.alsa_event_rx.try_recv() {
             Ok(event_string) => {
                 match event_string.as_str() {
-                    "Master Playback Volume" => Ok(true),
-                    _ => Ok(false)
+                    "Master Playback Volume" => true,
+                    _ => false
                 }
             },
-            Err(_) => Ok(false)
+            Err(_) => false
         }
     }
 

@@ -14,6 +14,7 @@ use std::path;
 // File notification
 use notify::{Watcher, RecursiveMode, raw_watcher, RawEvent};
 use std::sync::mpsc::channel;
+use std::sync::mpsc::{Sender, Receiver};
 use std::fmt;
 use std::io::{Error, ErrorKind};
 
@@ -79,15 +80,20 @@ pub struct StatusWatcher {
     sm_status_file: path::PathBuf,
     sm_queue_file: path::PathBuf,
     pub status_info: Arc<Mutex<QueueInfo>>,
+    status_update_rx: Receiver<()>,
+    status_update_tx: Sender<()>
 }
 
 
 impl StatusWatcher {
     pub fn new(status_file: path::PathBuf, queue_file: path::PathBuf) -> Result<Self>{
+        let (tx, rx) = channel();
         let stru = StatusWatcher { 
             sm_status_file: path::PathBuf::from(status_file),
             sm_queue_file: path::PathBuf::from(queue_file),
             status_info:  Arc::new(Mutex::new(QueueInfo::new())),
+            status_update_rx: rx,
+            status_update_tx: tx
         };
         Ok(stru)
     }
@@ -95,12 +101,20 @@ impl StatusWatcher {
     pub fn start(&mut self) {
         let sm_status_file_copy = path::PathBuf::from(&self.sm_status_file);
         let sm_queue_file_copy = path::PathBuf::from(&self.sm_queue_file);
+        
+        let guarded_queue_info = self.status_info.clone();
+        let status_update_tx = self.status_update_tx.clone();
+        thread::spawn(move || { watch_status_file(sm_status_file_copy, guarded_queue_info, status_update_tx)}); 
 
         let guarded_queue_info = self.status_info.clone();
-        thread::spawn(move || { watch_status_file(sm_status_file_copy, guarded_queue_info)}); 
-
-        let guarded_queue_info = self.status_info.clone();
-        thread::spawn(move || { watch_queue_file(sm_queue_file_copy, guarded_queue_info)});
+        let status_update_tx = self.status_update_tx.clone();
+        thread::spawn(move || { watch_queue_file(sm_queue_file_copy, guarded_queue_info, status_update_tx)});
+    }
+    pub fn check_for_status_change(&mut self) -> bool {
+        match self.status_update_rx.try_recv() {
+            Ok(_) => true,
+            Err(_) => false
+        }
     }
 }
 
@@ -145,8 +159,7 @@ fn update_from_status_file(file_path : &path::Path, status_info: Arc<Mutex<Queue
             if playbacktime_result.is_err() {
                 return Err(Error::new(ErrorKind::InvalidData, "Failed to cast playbacktime"));
             }
-            playback_time = playbacktime_result.unwrap();
-            
+            playback_time = playbacktime_result.unwrap();           
         }
         None => {
             return Err(Error::new(ErrorKind::InvalidData, "Playback time not found."));
@@ -177,7 +190,7 @@ fn update_from_status_file(file_path : &path::Path, status_info: Arc<Mutex<Queue
     return Ok(());
 }
 
-fn watch_status_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<QueueInfo>>){
+fn watch_status_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<QueueInfo>>, update_notifier: Sender<()>){
     // Create a channel to receive the events.
     let (tx, rx) = channel();
 
@@ -200,6 +213,7 @@ fn watch_status_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<Queue
                 let result = match op {
                     notify::op::WRITE | notify::op::CREATE => {
                         let result = update_from_status_file(file_path, status_info.clone());
+                        update_notifier.send(());
                         if result.is_err() {warn!("{:?}", result);}
                         result
                     },
@@ -215,7 +229,7 @@ fn watch_status_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<Queue
     }
 }
 
-fn watch_queue_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<QueueInfo>>){
+fn watch_queue_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<QueueInfo>>, update_notifier: Sender<()>){
     // Create a channel to receive the events.
     let (tx, rx) = channel();
 
@@ -238,6 +252,7 @@ fn watch_queue_file(file_path_buf : path::PathBuf, status_info: Arc<Mutex<QueueI
                 let result = match op {
                     notify::op::WRITE | notify::op::CREATE => {
                         let result = update_from_queue_file(file_path, status_info.clone());
+                        update_notifier.send(());
                         if result.is_err() {warn!("{:?}", result);}
                         result
                     },
