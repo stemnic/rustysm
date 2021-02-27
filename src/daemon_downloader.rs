@@ -106,6 +106,8 @@ impl Downloader {
         match self.finished_notifier.try_recv(){
             Ok(value) => {
                 self.downloaded_objects = value.clone();
+                self.finished = true;
+                self.failed = false;
                 Some(value)
             }
             Err(_) => {
