@@ -18,3 +18,5 @@ log4rs = "1.0.0"
 dirs = "3.0.1"
 clap = "2.33.3"
 youtube_dl = "0.6.0"
+mpv = "0.2"
+uuid = { version = "0.8", features = ["v4"] }

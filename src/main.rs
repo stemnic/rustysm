@@ -6,6 +6,10 @@ mod history_watcher;
 mod alsa_controller;
 mod tab_elements;
 mod socket_com;
+mod daemon;
+mod daemon_queue;
+mod daemon_downloader;
+mod external_program_status;
 
 use log::LevelFilter;
 use log4rs::append::file::FileAppender;
@@ -32,6 +36,7 @@ fn init_log(log_file_name : &str) -> () {
         .logger(Logger::builder().build("rustysm::alsa_controller", LevelFilter::Info))
         .logger(Logger::builder().build("rustysm::tab_elements", LevelFilter::Info))
         .logger(Logger::builder().build("rustysm::socket_com", LevelFilter::Info))
+        .logger(Logger::builder().build("rustysm::daemon", LevelFilter::Trace))
         .build(Root::builder()
                 .appender("logfile")
                 
@@ -49,6 +54,11 @@ fn main() -> Result<(), io::Error> {
                         .long("gui")
                         .takes_value(false)
                         .help("Launches rustysm in gui mode"))
+                .arg(Arg::with_name("daemon")
+                        .short("d")
+                        .long("daemon")
+                        .takes_value(false)
+                        .help("Launches rustysm daemon mode to recive commands from client"))
                 .arg(Arg::with_name("tickrate")
                         .short("t")
                         .long("tickrate")
@@ -101,6 +111,32 @@ fn main() -> Result<(), io::Error> {
         info!("Opening with history path {}", history_file_path);
         let mut ui = terminal_ui::TerminalUi::new(history_file_path)?;
         ui.start_draw(tickrate).unwrap();
+    } else if args.is_present("daemon") {
+        log::info!("Attempting to start daemon");
+        let daemon = daemon::Daemon::new().unwrap();
+        daemon.mpv_play_file("/home/medlem/musikk/Ceephax Acid Crew - Camelot Chronicles-138ajKRMzIY.mkv");
+        daemon.mpv_disable_audio_pitch_correction();
+        let mut speed = 0.5;
+        let mut forward = true;
+        loop {
+            std::thread::sleep_ms(100);
+            if forward {
+                speed = speed + 0.01;
+            } else {
+                speed = speed - 0.01;
+            }
+            if speed >= 2.0 {
+                forward = false;
+            }
+            if speed <= 0.5 {
+                forward = true;
+                speed = 0.5;
+            }
+            println!("{:?} {:?}", speed, forward);
+            
+            daemon.mpv_set_speed(speed);
+        }
+
     } else if args.is_present("QueueFile") {
         let tbq = args.value_of("QueueFile").unwrap();
         let mut priority = DEFAULT_PRIORITY;
