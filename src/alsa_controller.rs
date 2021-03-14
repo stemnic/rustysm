@@ -10,6 +10,7 @@ pub struct AlsaController {
     current_volume_db_percentage: f32,
     current_volume_db: f32,
     volume_max_db: f32,
+    broken: bool,
     volume_min_db: f32,
     alsa_event_rx: std::sync::mpsc::Receiver<String>
 }
@@ -33,10 +34,10 @@ impl AlsaController
             // update volume
         debug!("AlsaController Init");
         let (alsa_event_tx, alsa_event_rx) = channel();
-        let mut sys_control = AlsaController { current_volume_db_percentage: 0.0, current_volume_db: 0.0, volume_max_db: 0.0, volume_min_db: 0.0, alsa_event_rx: alsa_event_rx };
+        let mut sys_control = AlsaController { current_volume_db_percentage: 0.0, current_volume_db: 0.0, volume_max_db: 0.0, volume_min_db: 0.0, alsa_event_rx: alsa_event_rx, broken: false };
         sys_control.update_volume().unwrap();
         std::thread::spawn(move || {
-            let alsa_ctrl = Ctl::new("hw:0", false).unwrap();
+            let alsa_ctrl = Ctl::new("default", false).unwrap();
             alsa_ctrl.subscribe_events(true).unwrap();
             loop{
                 let event = alsa_ctrl.read().unwrap().unwrap();
@@ -62,7 +63,16 @@ impl AlsaController
         //let (mixer_vol_min, mixer_vol_max) = mixer_channel.get_playback_volume_range(); // Returns weird and dumb alsa scaling. Dont use.
         self.volume_max_db = mixer_db_max.to_db();
         self.volume_min_db = mixer_db_min.to_db();
-        self.current_volume_db = mixer_channel.get_playback_vol_db(mixer::SelemChannelId::Last).unwrap().to_db();
+        self.current_volume_db = match mixer_channel.get_playback_vol_db(mixer::SelemChannelId::Last){
+            Ok(value) => value.to_db(),
+            Err(error) => {
+                if !self.broken {
+                    error!("Could not get playback volume! {}", error);
+                    self.broken = true;
+                }
+                self.volume_min_db
+            }
+        };
         self.current_volume_db_percentage = 1.0 - (self.current_volume_db / mixer_db_min.to_db());
         debug!("Read current alsa volume as {}dB ({}%)", self.current_volume_db, self.current_volume_db_percentage * 100.0);
     }
@@ -141,6 +151,13 @@ impl AlsaController
         Ok(())
     }
     pub fn get_human_ear_volume_normalized(&mut self) -> f64 {
-        get_normalized_volume(self.volume_min_db, self.volume_max_db, self.current_volume_db) as f64
+        
+        let volume = get_normalized_volume(self.volume_min_db, self.volume_max_db, self.current_volume_db) as f64;
+        if volume.is_nan(){
+            // Workaround if alsa interface is not working for some reason
+            0.0
+        } else {
+            volume
+        }
     }
 }
