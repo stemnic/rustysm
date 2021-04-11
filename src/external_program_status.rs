@@ -20,10 +20,12 @@ pub fn spotify_play_pause() -> () {
 }
 
 pub fn mpd_playing() -> bool {
-    let status = Command::new("mpc")
+    let status = match Command::new("mpc")
     .args(&["status"])
-    .output()
-    .expect("mpc command");
+    .output() {
+        Ok(value) => value,
+        Err(error) => return false,
+    };
     let status_stdout = String::from_utf8_lossy(&status.stdout);
     if (*status_stdout).contains("playing")  {
         return true;
@@ -35,14 +37,14 @@ pub fn mpd_play() -> () {
     Command::new("mpc")
     .args(&["play"])
     .spawn()
-    .expect("mpc payse failed!");
+    .ok();
 }
 
 pub fn mpd_pause() -> () {
     Command::new("mpc")
     .args(&["pause"])
     .spawn()
-    .expect("mpc payse failed!");
+    .ok();
 }
 
 pub fn mpd_play_pause() -> () {

@@ -21,6 +21,11 @@ struct MPVMessage {
     message: String, // Can be nothing if command does not take any parameters
 }
 
+struct MPVFeedback {
+    feedbacktype: MPVFeedbackType,
+    message: String, // Can be nothing if type does not take any parameters
+}
+
 enum MPVCommand {
     Playfile,
     Seekfile,
@@ -32,9 +37,16 @@ enum MPVCommand {
     Pause,
 }
 
+enum MPVFeedbackType {
+    Idle,
+}
+
+
+
 #[derive(Debug)]
 pub struct Daemon{
-    mpv_controller : Sender<MPVMessage>
+    mpv_controller : Sender<MPVMessage>,
+    mpv_feedback   : Receiver<MPVFeedback>,
 }
 
 impl Daemon{
@@ -46,6 +58,7 @@ impl Daemon{
             Youtube download functionality
         */
         let (mpv_instance_tx, mpv_instance_rx) : (Sender<MPVMessage>, Receiver<MPVMessage>) = channel();
+        let (mpv_feedback_tx, mpv_feedback_rx) : (Sender<MPVFeedback>, Receiver<MPVFeedback>) = channel();
         let mpv_thread = std::thread::spawn(move || {
             let mut mpv_builder = mpv::MpvHandlerBuilder::new().expect("Failed to init MPV builder");
             // set option "sid" to "no" (no subtitles)
@@ -53,19 +66,50 @@ impl Daemon{
             // enable On Screen Controller (disabled with libmpv by default)
             mpv_builder.set_option("osc",true).unwrap();
             let mut mpv = mpv_builder.build().expect("Failed to build MPV handler");
+            mpv.set_option("idle", "yes").unwrap();
+            let mut spotify_was_playing = false;
+            let mut mpd_was_playing = false;
 
             'main: loop {
                 while let Some(event) = mpv.wait_event(0.0) {
                     // even if you don't do anything with the events, it is still necessary to empty
                     // the event loop
+
                     log::trace!("RECEIVED EVENT : {:?}", event);
                     match event {
                         // Shutdown will be triggered when the window is explicitely closed,
                         // while Idle will be triggered when the queue will end
                         mpv::Event::Shutdown => {
+                            println!("MPV shutting down!");
                             break 'main;
                         }
-                        _ => {}
+                        mpv::Event::Idle => {
+                            println!("Spotify {}", spotify_was_playing);
+                            println!("mpd {}", mpd_was_playing);
+                            if spotify_was_playing {
+                                spotify_was_playing = false;
+                                spotify_play_pause();
+                            }
+                            if mpd_was_playing {
+                                mpd_was_playing = false;
+                                mpd_play();
+                            }
+                            let message = MPVFeedback { feedbacktype: MPVFeedbackType::Idle, message: "".to_string()  };
+                            mpv_feedback_tx.send(message).unwrap();
+                        }
+                        mpv::Event::Unpause | mpv::Event::StartFile => {
+                            if spotify_playing() {
+                                spotify_was_playing = true;
+                                spotify_play_pause();
+                            }
+                            if mpd_playing() {
+                                mpd_was_playing = true;
+                                mpd_pause();
+                            }
+                        }
+                        _ => {
+                            println!("{:?} Got event", event);
+                        }
                     };
                     
                 }
@@ -91,7 +135,7 @@ impl Daemon{
                 }
             }
         });
-        let com = Daemon{ mpv_controller: mpv_instance_tx };
+        let com = Daemon{ mpv_controller: mpv_instance_tx, mpv_feedback: mpv_feedback_rx };
         Ok(com)
     }
 
