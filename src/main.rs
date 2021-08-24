@@ -127,9 +127,11 @@ fn main() -> Result<(), io::Error> {
             }
             if speed >= 2.0 {
                 forward = false;
-            }
+                daemon.mpv_enable_audio_pitch_correction();
+            } 
             if speed <= 0.5 {
                 forward = true;
+                daemon.mpv_disable_audio_pitch_correction();
                 speed = 0.5;
             }
             println!("{:?} {:?}", speed, forward);

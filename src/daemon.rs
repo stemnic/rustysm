@@ -146,6 +146,9 @@ impl Daemon{
     pub fn mpv_disable_audio_pitch_correction(&self) -> () {
         self.mpv_controller.send(MPVMessage { command: MPVCommand::DisableAudioPitchCorrection, message: "".to_string()}).unwrap();
     }
+    pub fn mpv_enable_audio_pitch_correction(&self) -> () {
+        self.mpv_controller.send(MPVMessage { command: MPVCommand::EnableAudioPitchCorrection, message: "".to_string()}).unwrap();
+    }
     pub fn mpv_set_speed(&self, speed:f64) -> () {
         self.mpv_controller.send(MPVMessage { command: MPVCommand::Speed, message: speed.to_string()}).unwrap();
     }
