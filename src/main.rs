@@ -87,7 +87,8 @@ fn main() -> Result<(), io::Error> {
                 .arg(Arg::with_name("QueueFile")
                         .required(false)
                         .index(1)
-                        .help("Media file to add to queue"))
+                        .help("Media file to add to queue")
+                        .multiple(true))
                 .get_matches();
     let mut log_path = home_dir().unwrap();
     if args.is_present("logfile") {
@@ -146,11 +147,14 @@ fn main() -> Result<(), io::Error> {
             priority = args.value_of("priority").unwrap().parse::<u64>().unwrap();
         }
         let mut socket_controller = SocketCom::new().unwrap();
-        let result_msg = match socket_controller.add_entry(tbq.to_string(), priority, args.is_present("raw")) {
-            Ok(value) => value,
-            Err(_) => {"Could not successfully queue object.\nConsider using -r to try as filestream for livestreams or other types.".to_string()}
-        };
-        println!("{}", result_msg);
+        for object_to_be_queued in args.values_of("QueueFile").unwrap().collect::<Vec<_>>() {
+            let result_msg = match socket_controller.add_entry(object_to_be_queued.to_string(), priority, args.is_present("raw")) {
+                Ok(value) => value,
+                Err(_) => {"Could not successfully queue object.\nConsider using -r to try as filestream for livestreams or other types.".to_string()}
+            };
+            println!("{}", result_msg);
+        }
+
 
     } else {
         println!("No input provided, consider trying --help");
