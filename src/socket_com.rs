@@ -158,6 +158,7 @@ impl SocketCom{
                 entry_type = EntryType::YoutubeMedia;
                 youtube_obj = Some(is_youtube.unwrap());
             } else {
+                println!("{:?}", is_youtube);
                 debug!("Not recognized input file/url");
             }
         }
@@ -200,7 +201,12 @@ impl SocketCom{
                 for video in video_array {
                     let mut tbs_data: Vec<u8> = vec![];
                     tbs_data.push(EntryType::YoutubeMedia as u8);
-                    let tbs_id_string = (*video.id).to_string() + " - " + &(*video.title);
+                    let mut tbs_id_string;
+                    if video.extractor == Some("youtube".to_string()) {
+                        tbs_id_string = (*video.id).to_string() + " - " + &(*video.title);
+                    }else{
+                        tbs_id_string = (*video.webpage_url.unwrap()).to_string() + " - " + &(*video.title);
+                    }
                     debug!("Youtube video add {}", &tbs_id_string);
                     feedback_message = feedback_message + "Added Youtube video " + &(*video.title) + "\n";
                     for byte in tbs_id_string.as_bytes() {
