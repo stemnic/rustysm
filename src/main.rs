@@ -35,7 +35,7 @@ fn init_log(log_file_name : &str) -> () {
         .logger(Logger::builder().build("rustysm::history_watcher", LevelFilter::Info))
         .logger(Logger::builder().build("rustysm::alsa_controller", LevelFilter::Info))
         .logger(Logger::builder().build("rustysm::tab_elements", LevelFilter::Info))
-        .logger(Logger::builder().build("rustysm::socket_com", LevelFilter::Info))
+        .logger(Logger::builder().build("rustysm::socket_com", LevelFilter::Trace))
         .logger(Logger::builder().build("rustysm::daemon", LevelFilter::Trace))
         .build(Root::builder()
                 .appender("logfile")
@@ -54,6 +54,14 @@ fn main() -> Result<(), io::Error> {
                         .long("gui")
                         .takes_value(false)
                         .help("Launches rustysm in gui mode"))
+                .arg(Arg::with_name("play")
+                        .long("play")
+                        .takes_value(false)
+                        .help("Resumes the video in showmovie backend"))
+                .arg(Arg::with_name("pause")
+                        .long("pause")
+                        .takes_value(false)
+                        .help("Pauses playing video in showmovie backend"))
                 .arg(Arg::with_name("daemon")
                         .short("d")
                         .long("daemon")
@@ -139,6 +147,16 @@ fn main() -> Result<(), io::Error> {
             
             daemon.mpv_set_speed(speed);
         }
+
+    } else if args.is_present("play") {
+        log::info!("Resuming sm backend");
+        let mut socket_controller = SocketCom::new().unwrap();
+        socket_controller.start_playback();
+        
+    } else if args.is_present("pause") {
+        log::info!("Pausing sm backend");
+        let mut socket_controller = SocketCom::new().unwrap();
+        socket_controller.pause_playback();
 
     } else if args.is_present("QueueFile") {
         let tbq = args.value_of("QueueFile").unwrap();

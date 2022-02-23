@@ -40,18 +40,29 @@ impl AlsaController
             let alsa_ctrl = Ctl::new("default", false).unwrap();
             alsa_ctrl.subscribe_events(true).unwrap();
             loop{
-                let event = alsa_ctrl.read().unwrap().unwrap();
-                let elem_id = event.get_id();
-                let elem_interface = elem_id.get_interface();
-                match elem_id.get_name() {
-                    Ok(name) => {
-                        alsa_event_tx.send(name.to_string());
-                        debug!("Got alsa card event {:?} {:?}", name, elem_interface);
+                match alsa_ctrl.read() {
+                    Ok(event_res) => {
+                        match event_res {
+                            Some(event) => {
+                                let elem_id = event.get_id();
+                                let elem_interface = elem_id.get_interface();
+                                match elem_id.get_name() {
+                                    Ok(name) => {
+                                        alsa_event_tx.send(name.to_string());
+                                        debug!("Got alsa card event {:?} {:?}", name, elem_interface);
+                                    }
+                                    Err(error) => {error!("Alsa event error occured {:?}", error); return;}
+                                };
+                            },
+                            None => {error!("Alsa event empty for some reason"); return;}
+                        }
+                        
                     }
-                    Err(_) => {warn!("Alsa event error occured")}
+                    Err(error) => {
+                        error!("Alsa event error occured {:?}", error);
+                        return;
+                    }
                 };
-
-                
             }
             
         });
