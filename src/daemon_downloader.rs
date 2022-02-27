@@ -69,10 +69,10 @@ impl Downloader {
                     let uuid_video = Uuid::new_v4();
                     let name = uuid_video.to_string();
                     let output = download_path.to_str().unwrap().to_string() + "/" + &name + ".%(ext)s";
-                    let feedback = Command::new("youtube-dl")
+                    let feedback = Command::new("yt-dlp")
                         .args(&["-o", &output, &video.webpage_url.unwrap(), "-i"])
                         .output()
-                        .expect("youtube-dl command failed hard!");
+                        .expect("yt-dlp command failed hard!");
                     let status_stdout = String::from_utf8_lossy(&feedback.stdout);
                     // Downloaddir/(original_queueid)-(arraypos).(format)
                     let mut resulting_video_path : String = "".to_string();
@@ -94,7 +94,7 @@ impl Downloader {
                 tx.send(return_array).unwrap();
             } else {
                 // Check and download other types of media
-                warn!("Youtube dl did not like {:?}", url);
+                warn!("yt-dlp did not like {:?}", url);
                 tx.send(vec![]).unwrap();
             }
         });
@@ -145,7 +145,7 @@ mod tests {
     #[test]
     fn test_single_video() {
         init_log();
-        let mut download = Downloader::new("https://www.youtube.com/watch?v=YgGzAKP_HuM".to_string(), "/tmp/".to_string()).unwrap();
+        let mut download = Downloader::new("https://www.youtube.com/watch?v=138ajKRMzIY".to_string(), "/tmp/".to_string()).unwrap();
         let mut result = vec![];
         loop{
             let res = download.check_download_ready();

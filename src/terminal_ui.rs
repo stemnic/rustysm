@@ -309,7 +309,7 @@ impl TerminalUi
                     // ...and they can be separated by a fixed spacing.
                     .column_spacing(1)
                     // If you wish to highlight a row in any specific way when it is selected...
-                    .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+                    .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
                     // ...and potentially show a symbol in front of the selection.
                     .highlight_symbol("👉");
 
@@ -329,7 +329,7 @@ impl TerminalUi
                     )
                     .block(Block::default().borders(Borders::ALL).title("History 📜"))
                     .widths(&[Constraint::Percentage(10), Constraint::Percentage(45), Constraint::Percentage(45)])
-                    .column_spacing(1).highlight_style(Style::default().add_modifier(Modifier::BOLD)).highlight_symbol("👉");
+                    .column_spacing(1).highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)).highlight_symbol("👉");
                     let help_text = vec![
                         Spans::from(Span::styled("←/→ or Use the number row to go between tabs", Style::default().fg(Color::Gray))),
                         Spans::from(Span::styled("+/-: Adjusts volume on the system", Style::default().fg(Color::Gray))),
