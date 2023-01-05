@@ -35,8 +35,8 @@ fn init_log(log_file_name : &str) -> () {
         .logger(Logger::builder().build("rustysm::history_watcher", LevelFilter::Info))
         .logger(Logger::builder().build("rustysm::alsa_controller", LevelFilter::Info))
         .logger(Logger::builder().build("rustysm::tab_elements", LevelFilter::Info))
-        .logger(Logger::builder().build("rustysm::socket_com", LevelFilter::Trace))
-        .logger(Logger::builder().build("rustysm::daemon", LevelFilter::Trace))
+        .logger(Logger::builder().build("rustysm::socket_com", LevelFilter::Info))
+        .logger(Logger::builder().build("rustysm::daemon", LevelFilter::Info))
         .build(Root::builder()
                 .appender("logfile")
                 
