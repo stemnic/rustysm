@@ -338,6 +338,7 @@ impl TerminalUi
                         Spans::from(Span::styled("Pageup/Pagedown: Jump up and down in lists", Style::default().fg(Color::Gray))),
                         Spans::from(Span::styled("Space: Play/Pause playing media", Style::default().fg(Color::Gray))),
                         Spans::from(Span::styled("Delete or r: Removes entry from queue", Style::default().fg(Color::Gray))),
+                        Spans::from(Span::styled("Tab: Skip the current entry", Style::default().fg(Color::Gray))),
                         Spans::from(Span::styled("Ctrl-r: Clears entire queue", Style::default().fg(Color::Gray))),
                         Spans::from(Span::styled("Enter: (Queue)Jump to or add to entry (History)", Style::default().fg(Color::Gray))),
                     ];
