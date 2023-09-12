@@ -64,7 +64,7 @@ impl Downloader {
                 let mut return_array = vec![];
 
                 for video in video_array {
-                    debug!("Downloading {}", video.title);
+                    debug!("Downloading {}", &video.title.clone().expect("Could not extract video title"));
                     let download_path = path::Path::new(&download_directory);
                     let uuid_video = Uuid::new_v4();
                     let name = uuid_video.to_string();
@@ -86,7 +86,7 @@ impl Downloader {
                         }
                     }
 
-                    let download_object = DownloadedObject{ name: video.title, path:resulting_video_path };
+                    let download_object = DownloadedObject{ name: video.title.clone().expect("Could not parse title"), path:resulting_video_path };
                     debug!("Resulting object {:?}", download_object);
                     return_array.push(download_object);
 

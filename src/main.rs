@@ -123,7 +123,7 @@ fn main() -> Result<(), io::Error> {
     } else if args.is_present("daemon") {
         log::info!("Attempting to start daemon");
         let daemon = daemon::Daemon::new().unwrap();
-        daemon.mpv_play_file("/home/medlem/musikk/Ceephax Acid Crew - Camelot Chronicles-138ajKRMzIY.mkv");
+        daemon.mpv_play_file("/home/medlem/flim/Ceephax Acid Crew - Camelot Chronicles-138ajKRMzIY.mkv");
         daemon.mpv_disable_audio_pitch_correction();
         let mut speed = 0.5;
         let mut forward = true;

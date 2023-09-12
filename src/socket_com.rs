@@ -203,12 +203,12 @@ impl SocketCom{
                     tbs_data.push(EntryType::YoutubeMedia as u8);
                     let mut tbs_id_string;
                     if video.extractor == Some("youtube".to_string()) {
-                        tbs_id_string = (*video.id).to_string() + " - " + &(*video.title);
+                        tbs_id_string = (*video.id).to_string() + " - " + &(*video.title.clone().expect("Could not extract title"));
                     }else{
-                        tbs_id_string = (*video.webpage_url.unwrap()).to_string() + " - " + &(*video.title);
+                        tbs_id_string = (*video.webpage_url.unwrap()).to_string() + " - " + &(*video.title.clone().expect("Could not extract title"));
                     }
                     debug!("Youtube video add {}", &tbs_id_string);
-                    feedback_message = feedback_message + "Added Youtube video " + &(*video.title) + "\n";
+                    feedback_message = feedback_message + "Added Youtube video " + &(*video.title.clone().expect("Could not extract title")) + "\n";
                     for byte in tbs_id_string.as_bytes() {
                         tbs_data.push(*byte);
                     }
