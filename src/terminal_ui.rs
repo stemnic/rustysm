@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 use termion::event::Key;
 use termion::input::TermRead;
 
+#[cfg(target_os = "linux")]
 use crate::alsa_controller::AlsaController;
 use crate::status_watcher::{StatusWatcher, PlaybackState};
 use crate::history_watcher::{HistoryWatcher, DEFAULT_HISTORY_ENTRIES_TO_FETCH};
@@ -70,6 +71,7 @@ impl TerminalUi
             }
         });
         let mut tab_select = 0;
+        #[cfg(target_os = "linux")]
         let mut alsa_controller = AlsaController::new()?;
         let mut socket_controller = SocketCom::new()?;
         let mut queue_tab_element = TabsElements::new("Queue 🔜")?;
@@ -112,10 +114,12 @@ impl TerminalUi
                             tab_select = tab_select - 1;
                         }
                     }
+                    #[cfg(target_os = "linux")]
                     termion::event::Key::Char('+') | termion::event::Key::Char('k') => {
                         alsa_controller.volume_increment_db(1)?;
                     }
 
+                    #[cfg(target_os = "linux")]
                     termion::event::Key::Char('-') | termion::event::Key::Char('j') => {
                         alsa_controller.volume_decrement_db(1)?;
                     }
@@ -210,7 +214,11 @@ impl TerminalUi
                 }
             }
 
-            if self.current_status.check_for_status_change() || self.history_log.check_for_status_change() || alsa_controller.wait_for_volume_event() {
+            if self.current_status.check_for_status_change() || self.history_log.check_for_status_change() {
+                update_screen = true;
+            }
+            #[cfg(target_os = "linux")]
+            if alsa_controller.wait_for_volume_event() {
                 update_screen = true;
             }
 
@@ -220,6 +228,7 @@ impl TerminalUi
                 queue_list = self.current_status.status_info.lock().unwrap().entry_list.clone();
                 playback_state = self.current_status.status_info.lock().unwrap().playback_state.clone();
 
+                #[cfg(target_os = "linux")]
                 alsa_controller.update_volume();
 
                 let mut queue_size = 0;
@@ -254,12 +263,14 @@ impl TerminalUi
                         .line_set(symbols::line::ROUNDED)
                         .ratio((playback_percentage as f64)/100.0);
                     f.render_widget(playback_gauge, chunks[0]);
-
+                    
+                    #[cfg(target_os = "linux")]
                     let volume_gauge = LineGauge::default()
                         .block(Block::default().borders(Borders::NONE).title("Volume 🔊 ".to_string() + &alsa_controller.get_description_str() ))
                         .gauge_style(Style::default().fg(Color::White).bg(Color::Black).add_modifier(Modifier::BOLD))
                         .line_set(symbols::line::ROUNDED)
                         .ratio(alsa_controller.get_human_ear_volume_normalized());
+                    #[cfg(target_os = "linux")]
                     f.render_widget(volume_gauge, chunks[1]);
                     
                     let paragraph = Paragraph::new("👉👉👉🆘 h, 4, F1 or ? for help 🆘👈👈👈".to_string())

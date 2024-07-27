@@ -3,6 +3,7 @@ use std::io;
 mod status_watcher;
 mod terminal_ui;
 mod history_watcher;
+#[cfg(target_os = "linux")]
 mod alsa_controller;
 mod tab_elements;
 mod socket_com;
@@ -123,7 +124,7 @@ fn main() -> Result<(), io::Error> {
     } else if args.is_present("daemon") {
         log::info!("Attempting to start daemon");
         let daemon = daemon::Daemon::new().unwrap();
-        daemon.mpv_play_file("/home/medlem/flim/Ceephax Acid Crew - Camelot Chronicles-138ajKRMzIY.mkv");
+        daemon.mpv_play_file("https://www.youtube.com/watch?v=138ajKRMzIY");
         daemon.mpv_disable_audio_pitch_correction();
         let mut speed = 0.5;
         let mut forward = true;
