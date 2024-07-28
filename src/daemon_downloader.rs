@@ -63,41 +63,65 @@ impl Downloader {
                     }
                 }
 
+                let mut worker_array = vec![];
                 let mut return_array = vec![];
 
                 for video in video_array {
-                    debug!(
-                        "Downloading {}",
-                        &video.title.clone().expect("Could not extract video title")
-                    );
-                    let download_path = path::Path::new(&download_directory);
-                    let uuid_video = Uuid::new_v4();
-                    let name = uuid_video.to_string();
-                    let output =
-                        download_path.to_str().unwrap().to_string() + "/" + &name + ".%(ext)s";
-                    let feedback = Command::new("yt-dlp")
-                        .args(&["-o", &output, &video.webpage_url.unwrap(), "-i"])
-                        .output()
-                        .expect("yt-dlp command failed hard!");
-                    let status_stdout = String::from_utf8_lossy(&feedback.stdout);
-                    // Downloaddir/(original_queueid)-(arraypos).(format)
-                    let mut resulting_video_path: String = "".to_string();
-                    let paths = fs::read_dir(download_path).unwrap();
-                    // Hacky way of finding the resulting filename
-                    for path in paths {
-                        let tmp_paht = path.unwrap().path();
-                        let res_path = tmp_paht.to_str().unwrap();
-                        if res_path.contains(&name) {
-                            resulting_video_path = res_path.to_string();
+                    let (tx_worker, rx_worker): (
+                        Sender<DownloadedObject>,
+                        Receiver<DownloadedObject>,
+                    ) = channel();
+                    let tx_worker = tx_worker.clone();
+                    let download_directory = download_directory.clone();
+                    std::thread::spawn(move || {
+                        debug!(
+                            "Downloading {}",
+                            &video.title.clone().expect("Could not extract video title")
+                        );
+                        let download_path = path::Path::new(&download_directory);
+                        let uuid_video = Uuid::new_v4();
+                        let name = uuid_video.to_string();
+                        let output =
+                            download_path.to_str().unwrap().to_string() + "/" + &name + ".%(ext)s";
+                        let feedback = Command::new("yt-dlp")
+                            .args(&["-o", &output, &video.webpage_url.unwrap(), "-i"])
+                            .output()
+                            .expect("yt-dlp command failed hard!");
+                        let status_stdout = String::from_utf8_lossy(&feedback.stdout);
+                        // Downloaddir/(original_queueid)-(arraypos).(format)
+                        let mut resulting_video_path: String = "".to_string();
+                        let paths = fs::read_dir(download_path).unwrap();
+                        // Hacky way of finding the resulting filename
+                        for path in paths {
+                            let tmp_paht = path.unwrap().path();
+                            let res_path = tmp_paht.to_str().unwrap();
+                            if res_path.contains(&name) {
+                                resulting_video_path = res_path.to_string();
+                            }
+                        }
+
+                        let download_object = DownloadedObject {
+                            name: video.title.clone().expect("Could not parse title"),
+                            path: resulting_video_path,
+                        };
+                        debug!("Resulting object {:?}", download_object);
+                        tx_worker
+                            .send(download_object)
+                            .expect("Failed to send download object");
+                    });
+                    worker_array.push(rx_worker);
+                }
+                while !worker_array.is_empty() {
+                    for (index, worker) in worker_array.iter().enumerate() {
+                        let result = worker.try_recv();
+                        if result.is_ok() {
+                            let download_object = result.unwrap();
+                            debug!("Downloaded object {:?}", download_object);
+                            return_array.push(download_object);
+                            worker_array.remove(index);
+                            break;
                         }
                     }
-
-                    let download_object = DownloadedObject {
-                        name: video.title.clone().expect("Could not parse title"),
-                        path: resulting_video_path,
-                    };
-                    debug!("Resulting object {:?}", download_object);
-                    return_array.push(download_object);
                 }
                 tx.send(return_array).unwrap();
             } else {
@@ -134,7 +158,7 @@ mod tests {
     use super::*;
     use log::LevelFilter;
     use log4rs::append::console::ConsoleAppender;
-    use log4rs::config::{Appender, Config, Logger, Root};
+    use log4rs::config::{Appender, Config, Root};
 
     fn init_log() {
         let stdout = ConsoleAppender::builder().build();
@@ -144,7 +168,7 @@ mod tests {
             .build(Root::builder().appender("stdout").build(LevelFilter::Trace))
             .unwrap();
 
-        let handle = log4rs::init_config(config).unwrap();
+        let _handle = log4rs::init_config(config).unwrap();
     }
 
     #[test]
@@ -162,13 +186,13 @@ mod tests {
                 result = res.unwrap();
                 break;
             }
-            std::thread::sleep_ms(100);
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
         println!("{:?}", result);
         assert_eq!(result.len(), 1);
         download.cleanup_downloaded_videoes();
         for video in result {
-            assert_eq!(path::Path::new(&video.path).exists(), false);
+            assert!(!path::Path::new(&video.path).exists());
         }
     }
 
@@ -177,7 +201,7 @@ mod tests {
         init_log();
         // Needs a playlist of stable videos
         let mut download = Downloader::new(
-            "https://youtube.com/playlist?list=PL-OLcteU63B5IiWt-aCICEHH2fjLnvGbA".to_string(),
+            "https://www.youtube.com/playlist?list=PLu0ehJFoscLibLNDyEXNlojl37IsemN4H".to_string(),
             "/tmp/".to_string(),
         )
         .unwrap();
@@ -188,13 +212,13 @@ mod tests {
                 result = res.unwrap();
                 break;
             }
-            std::thread::sleep_ms(100);
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
         println!("{:?}", result);
-        assert_eq!(result.len(), 22);
+        assert_eq!(result.len(), 6);
         download.cleanup_downloaded_videoes();
         for video in result {
-            assert_eq!(path::Path::new(&video.path).exists(), false);
+            assert!(!path::Path::new(&video.path).exists());
         }
     }
 }

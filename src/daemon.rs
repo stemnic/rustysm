@@ -115,8 +115,8 @@ impl Daemon {
                         }
                     };
                 }
-                match mpv_instance_rx.try_recv() {
-                    Ok(recv) => match recv.command {
+                if let Ok(recv) = mpv_instance_rx.try_recv() {
+                    match recv.command {
                         MPVCommand::Pause => mpv.set_property("pause", true).unwrap(),
                         MPVCommand::Play => mpv.set_property("pause", false).unwrap(),
                         MPVCommand::Playfile => {
@@ -138,8 +138,7 @@ impl Daemon {
                             mpv.set_property("audio-pitch-correction", "yes").unwrap()
                         }
                         _ => (),
-                    },
-                    Err(_) => {}
+                    }
                 }
             }
         });
