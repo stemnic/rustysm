@@ -1,13 +1,9 @@
 use std::io;
 
-use log::{error, info, warn, debug, trace};
-
-use crate::daemon_downloader::*;
-
 #[derive(Debug)]
-pub struct DaemonQueue{
+pub struct DaemonQueue {
     media_queue: Vec<QueueObject>,
-    to_be_processed_queue: Vec<PreQueueObject>
+    to_be_processed_queue: Vec<PreQueueObject>,
 }
 
 #[derive(Debug)]
@@ -18,7 +14,7 @@ struct QueueObject {
     title: String,
     object_type: ObjectTypes,
     playback_postition: f64,
-    settings: Settings
+    settings: Settings,
 }
 
 #[derive(Debug)]
@@ -42,7 +38,7 @@ struct Settings {
 pub struct InputObject {
     input_string: String,
     priority: u64,
-    settings: Settings
+    settings: Settings,
 }
 
 #[derive(Debug)]
@@ -51,7 +47,7 @@ struct PreQueueObject {
     finished: bool,
 }
 
-/* 
+/*
 1. Input object recived
 2. Determines if it's a local file or downloadable file based on input
 3. Add result to media queue
@@ -61,13 +57,17 @@ Alternaitve
 
 impl DaemonQueue {
     pub fn new() -> Result<Self, io::Error> {
-        Ok(DaemonQueue{ media_queue: vec![], to_be_processed_queue: vec![] })
+        Ok(DaemonQueue {
+            media_queue: vec![],
+            to_be_processed_queue: vec![],
+        })
     }
-    pub fn add_to_queue(&mut self, object: InputObject ) {
+    pub fn add_to_queue(&mut self, object: InputObject) {
         // When you attempt to add a object to the queue it needs to be processed first
-        self.to_be_processed_queue.push( PreQueueObject{ input: object, finished: false } );
+        self.to_be_processed_queue.push(PreQueueObject {
+            input: object,
+            finished: false,
+        });
     }
-    pub fn process_prequeue(&mut self) {
-        
-    }
+    pub fn process_prequeue(&mut self) {}
 }

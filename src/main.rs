@@ -17,10 +17,10 @@ use log4rs::append::file::FileAppender;
 use log4rs::config::{Appender, Config, Logger, Root};
 use log4rs::encode::pattern::PatternEncoder;
 
-use clap::{Arg, App, SubCommand};
+use clap::{App, Arg};
 use dirs::home_dir;
 
-use log::{error, info, warn, debug};
+use log::info;
 
 use crate::socket_com::{SocketCom, DEFAULT_PRIORITY};
 

@@ -1,23 +1,23 @@
+use std::fs;
 use std::io;
 use std::path;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::{Sender, Receiver};
 use std::process::Command;
-use std::fs;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::{Receiver, Sender};
 use uuid::Uuid;
 
 use youtube_dl::{YoutubeDl, YoutubeDlOutput};
 
-use log::{error, info, warn, debug, trace};
+use log::{debug, warn};
 
 #[derive(Debug)]
-pub struct Downloader{
+pub struct Downloader {
     finished: bool,
     failed: bool,
     url: String,
     download_directory: String,
     finished_notifier: Receiver<Vec<DownloadedObject>>,
-    downloaded_objects: Vec<DownloadedObject>
+    downloaded_objects: Vec<DownloadedObject>,
 }
 
 #[derive(Debug, Clone)]
@@ -27,21 +27,23 @@ pub struct DownloadedObject {
 }
 
 impl Downloader {
-    pub fn new(url:String, download_directory:String ) -> Result<Self, io::Error> {
-        let (tx, rx) : (Sender<Vec<DownloadedObject>>, Receiver<Vec<DownloadedObject>>) = channel();
-        let downloader = Downloader{ 
-                                    finished:false, 
-                                    failed:false, 
-                                    url:url.clone(), 
-                                    download_directory:download_directory.clone(), 
-                                    finished_notifier:rx, 
-                                    downloaded_objects: vec![] };
+    pub fn new(url: String, download_directory: String) -> Result<Self, io::Error> {
+        let (tx, rx): (
+            Sender<Vec<DownloadedObject>>,
+            Receiver<Vec<DownloadedObject>>,
+        ) = channel();
+        let downloader = Downloader {
+            finished: false,
+            failed: false,
+            url: url.clone(),
+            download_directory: download_directory.clone(),
+            finished_notifier: rx,
+            downloaded_objects: vec![],
+        };
         std::thread::spawn(move || {
-            let output = YoutubeDl::new(url.clone())
-                .socket_timeout("15")
-                .run();
+            let output = YoutubeDl::new(url.clone()).socket_timeout("15").run();
             debug!("Output object {:?}", output);
-            if output.is_ok(){
+            if output.is_ok() {
                 let youtube_obj = output.unwrap();
                 let mut video_array: Vec<youtube_dl::SingleVideo> = vec![];
                 let mut is_playlist = false;
@@ -50,8 +52,8 @@ impl Downloader {
                         let video = *value;
                         video_array.push(video);
                         debug!("Youtube singel video object");
-                    },
-                    YoutubeDlOutput::Playlist(value) =>{
+                    }
+                    YoutubeDlOutput::Playlist(value) => {
                         let playlist = *value;
                         is_playlist = true;
                         for video in playlist.entries.unwrap() {
@@ -64,18 +66,22 @@ impl Downloader {
                 let mut return_array = vec![];
 
                 for video in video_array {
-                    debug!("Downloading {}", &video.title.clone().expect("Could not extract video title"));
+                    debug!(
+                        "Downloading {}",
+                        &video.title.clone().expect("Could not extract video title")
+                    );
                     let download_path = path::Path::new(&download_directory);
                     let uuid_video = Uuid::new_v4();
                     let name = uuid_video.to_string();
-                    let output = download_path.to_str().unwrap().to_string() + "/" + &name + ".%(ext)s";
+                    let output =
+                        download_path.to_str().unwrap().to_string() + "/" + &name + ".%(ext)s";
                     let feedback = Command::new("yt-dlp")
                         .args(&["-o", &output, &video.webpage_url.unwrap(), "-i"])
                         .output()
                         .expect("yt-dlp command failed hard!");
                     let status_stdout = String::from_utf8_lossy(&feedback.stdout);
                     // Downloaddir/(original_queueid)-(arraypos).(format)
-                    let mut resulting_video_path : String = "".to_string();
+                    let mut resulting_video_path: String = "".to_string();
                     let paths = fs::read_dir(download_path).unwrap();
                     // Hacky way of finding the resulting filename
                     for path in paths {
@@ -86,10 +92,12 @@ impl Downloader {
                         }
                     }
 
-                    let download_object = DownloadedObject{ name: video.title.clone().expect("Could not parse title"), path:resulting_video_path };
+                    let download_object = DownloadedObject {
+                        name: video.title.clone().expect("Could not parse title"),
+                        path: resulting_video_path,
+                    };
                     debug!("Resulting object {:?}", download_object);
                     return_array.push(download_object);
-
                 }
                 tx.send(return_array).unwrap();
             } else {
@@ -103,16 +111,14 @@ impl Downloader {
     }
 
     pub fn check_download_ready(&mut self) -> Option<Vec<DownloadedObject>> {
-        match self.finished_notifier.try_recv(){
+        match self.finished_notifier.try_recv() {
             Ok(value) => {
                 self.downloaded_objects = value.clone();
                 self.finished = true;
                 self.failed = false;
                 Some(value)
             }
-            Err(_) => {
-                None
-            }
+            Err(_) => None,
         }
     }
 
@@ -122,7 +128,6 @@ impl Downloader {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -138,18 +143,22 @@ mod tests {
             .appender(Appender::builder().build("stdout", Box::new(stdout)))
             .build(Root::builder().appender("stdout").build(LevelFilter::Trace))
             .unwrap();
-    
+
         let handle = log4rs::init_config(config).unwrap();
     }
 
     #[test]
     fn test_single_video() {
         init_log();
-        let mut download = Downloader::new("https://www.youtube.com/watch?v=138ajKRMzIY".to_string(), "/tmp/".to_string()).unwrap();
+        let mut download = Downloader::new(
+            "https://www.youtube.com/watch?v=138ajKRMzIY".to_string(),
+            "/tmp/".to_string(),
+        )
+        .unwrap();
         let mut result = vec![];
-        loop{
+        loop {
             let res = download.check_download_ready();
-            if res.is_some(){
+            if res.is_some() {
                 result = res.unwrap();
                 break;
             }
@@ -167,11 +176,15 @@ mod tests {
     fn test_playlist_video() {
         init_log();
         // Needs a playlist of stable videos
-        let mut download = Downloader::new("https://youtube.com/playlist?list=PL-OLcteU63B5IiWt-aCICEHH2fjLnvGbA".to_string(), "/tmp/".to_string()).unwrap();
+        let mut download = Downloader::new(
+            "https://youtube.com/playlist?list=PL-OLcteU63B5IiWt-aCICEHH2fjLnvGbA".to_string(),
+            "/tmp/".to_string(),
+        )
+        .unwrap();
         let mut result = vec![];
-        loop{
+        loop {
             let res = download.check_download_ready();
-            if res.is_some(){
+            if res.is_some() {
                 result = res.unwrap();
                 break;
             }
