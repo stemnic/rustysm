@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# Run cargo fmt to format the code
+cargo fmt -- --check
+
+# Check if cargo fmt succeeded
+if [ $? -ne 0 ]; then
+    echo "Code is not formatted. Please run 'cargo fmt' to format the code."
+    exit 1
+fi

@@ -1,21 +1,21 @@
 use std::io;
 
-mod status_watcher;
-mod terminal_ui;
-mod history_watcher;
 #[cfg(target_os = "linux")]
 mod alsa_controller;
-mod tab_elements;
-mod socket_com;
 mod daemon;
-mod daemon_queue;
 mod daemon_downloader;
+mod daemon_queue;
 mod external_program_status;
+mod history_watcher;
+mod socket_com;
+mod status_watcher;
+mod tab_elements;
+mod terminal_ui;
 
 use log::LevelFilter;
 use log4rs::append::file::FileAppender;
-use log4rs::encode::pattern::PatternEncoder;
 use log4rs::config::{Appender, Config, Logger, Root};
+use log4rs::encode::pattern::PatternEncoder;
 
 use clap::{Arg, App, SubCommand};
 use dirs::home_dir;
@@ -24,10 +24,13 @@ use log::{error, info, warn, debug};
 
 use crate::socket_com::{SocketCom, DEFAULT_PRIORITY};
 
-fn init_log(log_file_name : &str) -> () {
+fn init_log(log_file_name: &str) -> () {
     let logfile = FileAppender::builder()
-    .encoder(Box::new(PatternEncoder::new("{d(%m-%d %H:%M:%S)}:{f}#{L}:[{h({l})}] - {m}\n")))
-    .build(log_file_name).unwrap();
+        .encoder(Box::new(PatternEncoder::new(
+            "{d(%m-%d %H:%M:%S)}:{f}#{L}:[{h({l})}] - {m}\n",
+        )))
+        .build(log_file_name)
+        .unwrap();
 
     let config = Config::builder()
         .appender(Appender::builder().build("logfile", Box::new(logfile)))
@@ -38,10 +41,8 @@ fn init_log(log_file_name : &str) -> () {
         .logger(Logger::builder().build("rustysm::tab_elements", LevelFilter::Info))
         .logger(Logger::builder().build("rustysm::socket_com", LevelFilter::Info))
         .logger(Logger::builder().build("rustysm::daemon", LevelFilter::Info))
-        .build(Root::builder()
-                .appender("logfile")
-                
-                .build(LevelFilter::Info)).unwrap();
+        .build(Root::builder().appender("logfile").build(LevelFilter::Info))
+        .unwrap();
     log4rs::init_config(config).unwrap();
 }
 
@@ -102,11 +103,13 @@ fn main() -> Result<(), io::Error> {
     let mut log_path = home_dir().unwrap();
     if args.is_present("logfile") {
         log_path = std::path::PathBuf::from(args.value_of("logfile").unwrap())
-    }else{
+    } else {
         log_path.push(".sm_client.log");
     }
     init_log(&log_path.into_os_string().into_string().unwrap());
-    log::info!("-----------------------------------------\n\n\nStarting great program, just for you!!");
+    log::info!(
+        "-----------------------------------------\n\n\nStarting great program, just for you!!"
+    );
     if args.is_present("gui") {
         let mut tickrate = 10;
         let mut home_path = home_dir().unwrap();
@@ -138,27 +141,24 @@ fn main() -> Result<(), io::Error> {
             if speed >= 2.0 {
                 forward = false;
                 daemon.mpv_enable_audio_pitch_correction();
-            } 
+            }
             if speed <= 0.5 {
                 forward = true;
                 daemon.mpv_disable_audio_pitch_correction();
                 speed = 0.5;
             }
             println!("{:?} {:?}", speed, forward);
-            
+
             daemon.mpv_set_speed(speed);
         }
-
     } else if args.is_present("play") {
         log::info!("Resuming sm backend");
         let mut socket_controller = SocketCom::new().unwrap();
         socket_controller.start_playback();
-        
     } else if args.is_present("pause") {
         log::info!("Pausing sm backend");
         let mut socket_controller = SocketCom::new().unwrap();
         socket_controller.pause_playback();
-
     } else if args.is_present("QueueFile") {
         let tbq = args.value_of("QueueFile").unwrap();
         let mut priority = DEFAULT_PRIORITY;
@@ -173,10 +173,8 @@ fn main() -> Result<(), io::Error> {
             };
             println!("{}", result_msg);
         }
-
-
     } else {
         println!("No input provided, consider trying --help");
     }
     Ok(())
-} 
+}
